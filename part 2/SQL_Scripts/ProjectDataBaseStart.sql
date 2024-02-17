@@ -178,8 +178,8 @@ INSERT INTO dbo.PRODUCTS (Name, Price, Discount)
 VALUES
 ('Light Salsa Garden', 119.99, 20),
 ('Root & Vegi Salad Garden', 129.99, 25),
-('Custom: SnflwrGldn, PprLB', 159.99, 30),
-('Custom: Scln, Fnl, SnflrGldn', 159.99, 10),
+('Custom: SnflwrGldn2, PprLB2', 159.99, 30),
+('Custom: Scln3, Fnl2, SnflrGldn3', 159.99, 10),
 ('SUPER Fertilizer', 34.99, 3.75),
 ('Pruning & Harvesting Scissors', 39.99, 10)
 
@@ -257,8 +257,8 @@ INSERT INTO dbo.GARDENS (Name, Small_count, Large_count)
 VALUES
 ('Light Salsa Garden', 2, 2),
 ('Root & Vegi Salad Garden', 5, 1),
-('Custom: SnflwrGldn, PprLB', 2, 2),
-('Custom: Scln, Fnl, SnflrGldn', 8, 0)
+('Custom: SnflwrGldn2, PprLB2', 2, 2),
+('Custom: Scln3, Fnl2, SnflrGldn3', 8, 0)
 
 -- insertion to dbo.CHOSENS
 
@@ -270,11 +270,11 @@ VALUES
 ('Root & Vegi Salad Garden', 'Fennel', 2),
 ('Root & Vegi Salad Garden', 'Tomato: Heirloom Purple', 1),
 ('Root & Vegi Salad Garden', 'Scallion', 3),
-('Custom: SnflwrGldn, PprLB', 'Sunflower: Golden', 2),
-('Custom: SnflwrGldn, PprLB', 'Pepper: Large Bell', 2),
-('Custom: Scln, Fnl, SnflrGldn', 'Sunflower: Golden', 3),
-('Custom: Scln, Fnl, SnflrGldn', 'Fennel', 2),
-('Custom: Scln, Fnl, SnflrGldn', 'Scallion', 3)
+('Custom: SnflwrGldn2, PprLB2', 'Sunflower: Golden', 2),
+('Custom: SnflwrGldn2, PprLB2', 'Pepper: Large Bell', 2),
+('Custom: Scln3, Fnl2, SnflrGldn3', 'Sunflower: Golden', 3),
+('Custom: Scln3, Fnl2, SnflrGldn3', 'Fennel', 2),
+('Custom: Scln3, Fnl2, SnflrGldn3', 'Scallion', 3)
 
 -- insertion to dbo.DETAILS
 
@@ -313,8 +313,8 @@ VALUES
 
 INSERT INTO dbo.INCLUSIONS (OrderID, Name, Quantity)
 VALUES
-(33222, 'Custom: SnflwrGldn, PprLB', 3),
-(33222, 'Custom: Scln, Fnl, SnflrGldn', 3),
+(33222, 'Custom: SnflwrGldn2, PprLB2', 3),
+(33222, 'Custom: Scln3, Fnl2, SnflrGldn3', 3),
 (33223, 'SUPER Fertilizer', 2),
 (33224, 'Pruning & Harvesting Scissors', 1),
 (33225, 'Light Salsa Garden', 20),
