@@ -3,10 +3,7 @@
 CREATE TABLE dbo.PRODUCTS (		-- creating dbo.PRODUCTS table
 	Name			Varchar(40)		PRIMARY KEY		NOT NULL,
 	Price			Smallmoney						NOT NULL,
-	Discount		Smallmoney						NOT NULL	DEFAULT 0,
-
-	CONSTRAINT	Ck_Price		CHECK		(Price > 0),
-	CONSTRAINT	Ck_Discount		CHECK		(Discount < Price)
+	Discount		Smallmoney						NOT NULL	DEFAULT 0
 )
 
 CREATE TABLE dbo.RELATIONS (	-- creating dbo.RELATIONS table
@@ -22,9 +19,7 @@ CREATE TABLE dbo.RELATIONS (	-- creating dbo.RELATIONS table
 
 CREATE TABLE dbo.USERS (		-- creating dbo.USERS table
 	Email			Varchar(40)		PRIMARY KEY		NOT NULL,
-	Password		Varchar(30)						NOT NULL,
-
-	CONSTRAINT	Ck_Email		CHECK		(Email LIKE '%@%.%')
+	Password		Varchar(30)						NOT NULL
 )
 
 CREATE TABLE dbo.SEARCHES (		-- creating dbo.SEARCHES table
@@ -35,11 +30,7 @@ CREATE TABLE dbo.SEARCHES (		-- creating dbo.SEARCHES table
 
 	CONSTRAINT	Pk_searches		PRIMARY KEY	(SearchDT, IP_address),
 	CONSTRAINT	Fk_user_srch	FOREIGN KEY	(Email)
-									REFERENCES	dbo.USERS		(Email),
-	CONSTRAINT	Ck_IP_address	CHECK		((ParseName(IP_address, 4) BETWEEN 0 AND 255) -- constraint that makes sure that in any part of the ip address it is between 0 and 255
-											AND(ParseName(IP_address, 3) BETWEEN 0 AND 255)
-											AND(ParseName(IP_address, 2) BETWEEN 0 AND 255)
-											AND(ParseName(IP_address, 1) BETWEEN 0 AND 255))
+									REFERENCES	dbo.USERS		(Email)
 )
 
 CREATE TABLE dbo.RESULTS (		-- creating dbo.RESULTS table
@@ -61,9 +52,7 @@ CREATE TABLE dbo.SEEDS (		-- creating dbo.SEEDS table
 	Sun_amount		Varchar(30)						NOT NULL,
 
 	CONSTRAINT	Fk_Name_seed	FOREIGN KEY	(Name)
-									REFERENCES	dbo.PRODUCTS	(Name),
-	CONSTRAINT	Ck_Size			CHECK		(Size IN ('Small', 'Large')),
-	CONSTRAINT	Ck_Season		CHECK		(Season IN ('Summer', 'Spring', 'Winter', 'Fall'))
+									REFERENCES	dbo.PRODUCTS	(Name)
 )
 
 CREATE TABLE dbo.SEED_TYPES (	-- creating dbo.SEED_TYPES table
@@ -81,9 +70,7 @@ CREATE TABLE dbo.GARDENS (		-- creating dbo.GARDENS table
 	Large_count		Tinyint							NOT NULL,
 
 	CONSTRAINT	Fk_Name_Garden	FOREIGN KEY	(Name)
-									REFERENCES	dbo.PRODUCTS	(Name),
-	CONSTRAINT	Ck_Small_count	CHECK		(Small_count > 1 AND Small_count < 9),
-	CONSTRAINT	Ck_Large_count	CHECK		(Large_count > -1 AND Large_count < 3)
+									REFERENCES	dbo.PRODUCTS	(Name)
 )
 
 CREATE TABLE dbo.CHOSENS (		-- creating dbo.CHOSENS table
@@ -95,8 +82,7 @@ CREATE TABLE dbo.CHOSENS (		-- creating dbo.CHOSENS table
 	CONSTRAINT	Fk_Garden		FOREIGN KEY	(Garden)
 									REFERENCES	dbo.GARDENS		(Name),
 	CONSTRAINT	Fk_Seed_chs		FOREIGN KEY	(Seed)
-									REFERENCES	dbo.SEEDS		(Name),
-	CONSTRAINT	Ck_Quantity_chs	CHECK		(Quantity > 0)
+									REFERENCES	dbo.SEEDS		(Name)
 )
 
 CREATE TABLE dbo.DETAILS (		-- creating dbo.DETAILS table
@@ -105,8 +91,7 @@ CREATE TABLE dbo.DETAILS (		-- creating dbo.DETAILS table
 	Company			Varchar(40)						NULL,
 	Phone#			Varchar(30)						NOT NULL,
 
-	CONSTRAINT	Pk_details		PRIMARY KEY	(Name, Address),
-	CONSTRAINT	Ck_Phone#		CHECK		(Phone# LIKE '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
+	CONSTRAINT	Pk_details		PRIMARY KEY	(Name, Address)
 )
 
 CREATE TABLE dbo.DETAILS_OF (	-- creating dbo.DETAILS_OF table
@@ -133,8 +118,7 @@ CREATE TABLE dbo.ORDERS (		-- creating dbo.ORDERS table
 	CONSTRAINT	Fk_user_ordr	FOREIGN KEY	(Email)
 									REFERENCES	dbo.USERS		(Email),
 	CONSTRAINT	Fk_details_ordr	FOREIGN KEY	(Name, Address)
-									REFERENCES	dbo.DETAILS		(Name, Address),
-	CONSTRAINT	Ck_Payment_type	CHECK		(Payment_type IN ('Klarna', 'ShopPay'))
+									REFERENCES	dbo.DETAILS		(Name, Address)
 )
 
 CREATE TABLE dbo.INCLUSIONS (	-- creating dbo.INCLUSIONS table
@@ -146,9 +130,62 @@ CREATE TABLE dbo.INCLUSIONS (	-- creating dbo.INCLUSIONS table
 	CONSTRAINT	Fk_order_ncl	FOREIGN KEY	(OrderID)
 									REFERENCES	dbo.ORDERS		(OrderID),
 	CONSTRAINT	Fk_product_ncl	FOREIGN KEY	(Name)
-									REFERENCES	dbo.PRODUCTS	(Name),
-	CONSTRAINT	Ck_Quantity_ncl	CHECK		(Quantity > 0)
+									REFERENCES	dbo.PRODUCTS	(Name)
 )
+
+-- || CONSTRAINTS ADDITION SECTION ||
+
+-- contrsaints for inforcing values of price and discount of products
+
+ALTER TABLE dbo.PRODUCTS
+	ADD CONSTRAINT	Ck_Price		CHECK		(Price > 0),
+		CONSTRAINT	Ck_Discount		CHECK		(Discount < Price)
+
+-- constraint that inforces Email format
+
+ALTER TABLE dbo.USERS
+	ADD	CONSTRAINT	Ck_Email		CHECK		(Email LIKE '%@%.%')
+
+-- constraint that inforces ip format
+
+ALTER TABLE dbo.SEARCHES
+	ADD CONSTRAINT	Ck_IP_address	CHECK		((ParseName(IP_address, 4) BETWEEN 0 AND 255) 
+												AND(ParseName(IP_address, 3) BETWEEN 0 AND 255)
+												AND(ParseName(IP_address, 2) BETWEEN 0 AND 255)
+												AND(ParseName(IP_address, 1) BETWEEN 0 AND 255))
+
+-- constraints that inforces values of Size and Season
+
+ALTER TABLE dbo.SEEDS
+	ADD	CONSTRAINT	Ck_Size			CHECK		(Size IN ('Small', 'Large')),
+		CONSTRAINT	Ck_Season		CHECK		(Season IN ('Summer', 'Spring', 'Winter', 'Fall'))
+
+-- constraints that inforces values of Small_count and Large_count
+
+ALTER TABLE dbo.GARDENS		
+	ADD	CONSTRAINT	Ck_counts		CHECK		((Small_count = 2 AND Large_count = 2)
+												OR (Small_count = 5 AND Large_count = 1)
+												OR (Small_count = 8 AND Large_count = 0))
+
+-- constraint that inforces vakue of quantity
+
+ALTER TABLE dbo.CHOSENS
+	ADD	CONSTRAINT	Ck_Quantity_chs	CHECK		(Quantity > 0)
+
+-- add constraint to inforce phone# format
+
+ALTER TABLE dbo.DETAILS
+	ADD CONSTRAINT	Ck_Phone#		CHECK		(Phone# LIKE '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
+
+-- add constraint to inforce values of payment_type 
+
+ALTER TABLE dbo.ORDERS
+	ADD CONSTRAINT	Ck_Payment_type	CHECK		(Payment_type IN ('Klarna', 'ShopPay'))
+
+-- add constraint to inforce values of quantity
+
+ALTER TABLE dbo.INCLUSIONS
+	ADD CONSTRAINT	Ck_Quantity_ncl	CHECK		(Quantity > 0)
 
 -- || LOOKUP TABLES CREATION ||
 
@@ -322,9 +359,6 @@ VALUES
 (33227, 'Pruning & Harvesting Scissors', 5),
 (33228, 'Sunflower: Golden', 30)
 
--- || CONSTRAINTS ADDITION SECTION ||
-
--- add constraint to inforce that a garden should hve the exact amount it can contain in seeds, is it possible???
 
 -- || DROPING OF TABLES SECTION ||
 
