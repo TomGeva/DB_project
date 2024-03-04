@@ -39,11 +39,11 @@ ORDER BY    2 DESC
 
 /*  
     Find TOP 5 companies by total orders price.
-    The motivation of knowing this information: Suggesting benefits for corporate clients.
+    The motivation of knowing this information: Suggesting benefits and products for corporate clients.
  */ 
 SELECT      TOP 5
             dts.Company, 
-            SUM(prd.Price * inc.Quantity) AS total_orders_price,
+            SUM((prd.Price - (prd.Price * prd.Discount/100)) * inc.Quantity) AS total_orders_price,
             COUNT(ord.OrderID) AS count_orders
 FROM        dbo.ORDERS AS ord
             INNER JOIN dbo.DETAILS AS dts
@@ -80,6 +80,36 @@ ORDER BY    2
 ;
 
 
+/*
+    Which week days had the most orders above the average price?
+    Motivation: Post advertisments and discounts on the website on those week days.
+*/
+
+SELECT      DATENAME(WEEKDAY, ord.OrderDate) AS order_week_day, COUNT(*) AS num_of_orders
+FROM        dbo.ORDERS AS ord    
+            INNER JOIN dbo.INCLUSIONS AS inc
+                ON inc.OrderID = ord.OrderID
+            INNER JOIN dbo.PRODUCTS AS prd
+                ON prd.Name = inc.Name
+WHERE       (prd.Price - (prd.Price * prd.Discount / 100)) * inc.Quantity > ( /* select orders that their total price is above average */
+
+                                            SELECT  AVG(ord_prices.order_price) AS avg_order_price /* calculate average order price */
+                                            FROM
+                                                (   /* calculate total price for each order */
+                                                    SELECT  inc1.OrderID, SUM((prd1.Price - (prd1.Price * prd1.Discount/100)) * inc1.Quantity) AS order_price
+                                                    FROM dbo.INCLUSIONS AS inc1
+                                                    INNER JOIN dbo.PRODUCTS AS prd1
+                                                        ON prd1.Name = inc1.Name
+                                                    GROUP BY inc1.OrderID         
+
+                                                ) AS ord_prices
+                                            
+                                            )
+GROUP BY    DATENAME(WEEKDAY, ord.OrderDate)
+;
+
+
+/* PART 3 - Upgraded Nested Queries */
 
 
 /* PART 4 - Window Functions */
@@ -87,6 +117,8 @@ ORDER BY    2
 /* 
     Present TOP 3 seeds (with climate details: sun amount and season) that were sold within per State and City.
     Motivation: Adjust seed marketing per geography / Think of new seeds to sell.
+
+    NOTE: MIGHT NEED SOME CHANGES IN THE TABLES BECAUSE OF THE ADDITION OF "DESIGN" WEAK ENTITY.
 
 */
 
@@ -117,11 +149,72 @@ ORDER BY    ordered_quants.State, ordered_quants.City, ordered_quants.total_orde
 ;
 
 
-/* PART 5 - WITH */
+/* 
+    Per User: Calculate Avg. Days gap between orders and amount of days since last order.
+                With this information, estimate the time to the next order a user will make.
+    Also calculate total Avg. Days gap between orders.
+    Motivation: Market analysis, detect demand rate and plan manufacturing rates / advertisment
+*/
+
+SELECT  Email, OrderID, OrderDate,
+        Orders_Per_User = COUNT(OrderID) OVER (PARTITION BY Email),
+        Total_Avg_orders_time_gap = AVG(Difference_in_Days) OVER (),
+        Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email),
+        Days_from_Last_User_Order,
+        Estimated_Days_to_Next_Order = AVG(Difference_in_Days) OVER (PARTITION BY Email) - Days_from_Last_User_Order
+    
+FROM
+    (
+        SELECT Ord.Email, Ord.OrderID, Ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email) AS Next_Order_Date,
+            DATEDIFF(day, ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email)) AS Difference_in_Days,
+            Last_User_Order_Date = LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email),
+            Days_from_Last_User_Order = DATEDIFF(day, LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email), GETDATE())
+        FROM dbo.ORDERS AS ord
+
+        WHERE ord.Email IS NOT NULL
+
+    ) AS next_ords
+;
+
+
+
+/* PART 5 - WITH QUERY */
 
 /* 
-    What is the percentage of orders that their total price is above the average price?
+    IDEAS
+    Inspect Shopping trends by: 
+            * Orders and OrdersPrice per weekday and month of the year.
+            * Search to Order time per weekday and month of the year.
+            * Popular Seed Category.
+            * Which seed category is search for per state and city? and compare it to orders of that category in State and City.
+                Motivation: Seed preferences according to geographical area and how does the search engine helps to get more orders.\
+    THE FOLLOWING CODE IS FOR THE LAST IDEA
 */
+
+WITH geo_for_search (State, City) AS (
+    SELECT      DISTINCT
+                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City
+    FROM        dbo.DETAILS
+),
+geo_for_order () AS (
+
+),
+ searched_seed_cat ([Type], cat_search_count) AS (
+    SELECT      st.[Type], COUNT(CONCAT(res.IP_address, res.SearchDT)) AS cat_search_count
+    FROM        dbo.RESULTS AS res
+    INNER JOIN  dbo.SEED_TYPES AS st
+        ON res.Name = st.Name
+    GROUP BY    st.[Type]
+),
+ordered_seed_cat () AS (
+
+)
+SELECT *
+FROM searched_seed_cat
+;
+
+
 
 
  /* TYUUUUUUUUTAAAAA ***DRAFT*** */
