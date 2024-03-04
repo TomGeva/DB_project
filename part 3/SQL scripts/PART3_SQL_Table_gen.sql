@@ -78,7 +78,7 @@ CREATE TABLE dbo.GARDENS (		-- creating dbo.GARDENS table
 	CONSTRAINT	Fk_Name_Grdn	FOREIGN KEY		(Name)
 									REFERENCES	dbo.PRODUCTS	(Name)
 )
-
+--FIX
 CREATE TABLE dbo.CHOSENS (		-- creating dbo.CHOSENS table
 	Garden			Varchar(80)			NOT NULL,
 	Seed			Varchar(80)			NOT NULL,
@@ -183,7 +183,7 @@ ALTER TABLE dbo.GARDENS
 
 -- constraint that inforces value of quantity
 
-ALTER TABLE dbo.CHOSENS
+ALTER TABLE dbo.CHOSENS --FIX
 	ADD	CONSTRAINT	Ck_Quantity_chs
 			CHECK	(Quantity > 0)
 
@@ -229,168 +229,6 @@ ALTER TABLE dbo.ORDERS
 	ADD CONSTRAINT	Fk_Pymnt_type	FOREIGN KEY	(Payment_type)	
 										REFERENCES	dbo.PYMNTTYPELOOKUP	(Type)
 
--- || DATA INSERTION SECTION ||
-
--- insertion to dbo.PRODUCTS
-
-INSERT INTO dbo.PRODUCTS
-VALUES
-('Fennel', 12, 0),
-('Scallion', 10, 0),
-('Tomato: Heirloom Purple', 10, 0),
-('Sunflower: Golden', 12, 0),
-('Pepper: Large Bell', 9, 0),
-('Light Salsa Garden', 119.99, 20),
-('Root & Vegi Salad Garden', 129.99, 25),
-('Simple Vegi Salad Garden', 129.99, 25),
-('Custom: SnflwrGldn2, PprLB2', 159.99, 30),
-('Custom: Scln3, Fnl2, SnflrGldn3', 159.99, 10),
-('SUPER Fertilizer', 34.99, 3.75),
-('Pruning & Harvesting Scissors', 39.99, 10)
-
--- insertion to dbo.RELATIONS
-
-INSERT INTO dbo.RELATIONS
-VALUES
-('SUPER Fertilizer', 'Light Salsa Garden'),
-('SUPER Fertilizer', 'Root & Vegi Salad Garden'),
-('SUPER Fertilizer', 'Sunflower: Golden'),
-('Pruning & Harvesting Scissors', 'Light Salsa Garden'),
-('Pruning & Harvesting Scissors', 'Root & Vegi Salad Garden'),
-('Pruning & Harvesting Scissors', 'Fennel'),
-('Pruning & Harvesting Scissors', 'Scallion')
-
--- insertion to dbo.USERS
-
-INSERT INTO dbo.USERS
-VALUES
-('tomge@post.bgu.ac.il', 'Mis63677'),
-('sophiada@post.bgu.ac.il', 'Mis99988'),
-('juliev@post.bgu.ac.il', 'Mis45774'),
-('georgebush@gmail.com', 'g01w09B6'),
-('mickeyM@walla.co.il', 'Hoho1235')
-
--- insertion to dbo.SEARCHES
-
-INSERT INTO dbo.SEARCHES
-VALUES
-('1999-03-16 13:57:22', '10.100.102.13', 'mickeyM@walla.co.il', 'Seed'),
-('2006-04-29 10:30:12', '255.30.2.0', NULL, 'Fertilizer'),
-('2013-02-01 14:03:54', '99.234.8.8', 'juliev@post.bgu.ac.il', 'Burger'),
-('2015-06-02 15:57:51', '82.43.43.74', 'georgebush@gmail.com', 'Pen'),
-('2023-12-30 20:26:24', '69.120.55.26', 'sophiada@post.bgu.ac.il', 'Fennel'),
-('2024-01-03 23:56:38', '0.74.255.254', 'sophiada@post.bgu.ac.il', 'Google')
-
--- insertion to dbo.RESULTS
-
-INSERT INTO dbo.RESULTS
-VALUES
-('Fennel', '1999-03-16 13:57:22', '10.100.102.13'),
-('Scallion', '1999-03-16 13:57:22', '10.100.102.13'),
-('Tomato: Heirloom Purple', '1999-03-16 13:57:22', '10.100.102.13'),
-('Sunflower: Golden', '1999-03-16 13:57:22', '10.100.102.13'),
-('Pepper: Large Bell', '1999-03-16 13:57:22', '10.100.102.13'),
-('SUPER Fertilizer', '2006-04-29 10:30:12', '255.30.2.0'),
-('Fennel', '2023-12-30 20:26:24', '69.120.55.26')
-
--- insertion to dbo.SEEDS
-
-INSERT INTO dbo.SEEDS
-VALUES
-('Fennel', 'Small', 'Spring', 'Full Sun / Partial Shade'),
-('Scallion', 'Small', 'Winter', 'Partial Shade'),
-('Tomato: Heirloom Purple', 'Large', 'Summer', 'Full Sun'),
-('Sunflower: Golden', 'Small', 'Spring', 'Prefers Full Sun'),
-('Pepper: Large Bell', 'Large', 'Fall', 'Prefers Full Sun')
-
--- insertion to dbo.SEED_TYPES
-
-INSERT INTO dbo.SEED_TYPES
-VALUES
-('Fennel', 'Greens'),
-('Fennel', 'Fruiting'),
-('Fennel', 'Root Vegetables'),
-('Scallion', 'Herbs'),
-('Tomato: Heirloom Purple', 'Heirloom'),
-('Tomato: Heirloom Purple', 'Fruiting'),
-('Sunflower: Golden', 'Flowers'),
-('Pepper: Large Bell', 'Fruiting')
-
--- insertion to dbo.GARDENS
-
-INSERT INTO dbo.GARDENS
-VALUES
-('Light Salsa Garden', 2, 2),
-('Root & Vegi Salad Garden', 5, 1),
-('Simple Vegi Salad Garden', 2, 2),
-('Custom: SnflwrGldn2, PprLB2', 2, 2),
-('Custom: Scln3, Fnl2, SnflrGldn3', 8, 0)
-
--- insertion to dbo.CHOSENS
-
-INSERT INTO dbo.CHOSENS
-VALUES
-('Light Salsa Garden', 'Pepper: Large Bell', 1),
-('Light Salsa Garden', 'Tomato: Heirloom Purple', 1),
-('Light Salsa Garden', 'Scallion', 2),
-('Root & Vegi Salad Garden', 'Fennel', 2),
-('Root & Vegi Salad Garden', 'Tomato: Heirloom Purple', 1),
-('Root & Vegi Salad Garden', 'Scallion', 3),
-('Simple Vegi Salad Garden', 'Tomato: Heirloom Purple', 1),
-('Simple Vegi Salad Garden', 'Pepper: Large Bell', 1),
-('Simple Vegi Salad Garden', 'Fennel', 1),
-('Simple Vegi Salad Garden', 'Scallion', 1),
-('Custom: SnflwrGldn2, PprLB2', 'Sunflower: Golden', 2),
-('Custom: SnflwrGldn2, PprLB2', 'Pepper: Large Bell', 2),
-('Custom: Scln3, Fnl2, SnflrGldn3', 'Sunflower: Golden', 3),
-('Custom: Scln3, Fnl2, SnflrGldn3', 'Fennel', 2),
-('Custom: Scln3, Fnl2, SnflrGldn3', 'Scallion', 3)
-
--- insertion to dbo.DETAILS
-
-INSERT INTO dbo.DETAILS
-VALUES
-('Mickey H Mouse the 1st', 'United States, California, Disney Land, , , 00000001', 'Disney', '1234598889'),
-('Goofy & Pluto', 'United States, California, Disney Land, , , 00000001', 'Disney', '0126549854'),
-('Sargent Donald Duck', 'United States, California, Disney Land, , , 00000001', 'Disney', '1235516595'),
-('George W. Bush', 'United States, Texas, Alburkurky, Saint st., 3, 23611356', 'The Government', '2222222221'),
-('Laura Welch', 'United States, Texas, Alburkurky, Midland st., 8, 23615656', NULL, '2222222222'),
-('Sargent Donald Duck', 'United States, Texas, Alburkurky, Saint st., 3, 23611356', 'The Government', '1235516595')
-
--- insertion to dbo.DETAILS_OF
-
-INSERT INTO dbo.DETAILS_OF
-VALUES
-('mickeyM@walla.co.il', 'Mickey H Mouse the 1st', 'United States, California, Disney Land, , , 00000001'),
-('mickeyM@walla.co.il', 'Goofy & Pluto', 'United States, California, Disney Land, , , 00000001'),
-('mickeyM@walla.co.il', 'Sargent Donald Duck', 'United States, California, Disney Land, , , 00000001'),
-('georgebush@gmail.com', 'George W. Bush', 'United States, Texas, Alburkurky, Saint st., 3, 23611356'),
-('georgebush@gmail.com', 'Sargent Donald Duck', 'United States, Texas, Alburkurky, Saint st., 3, 23611356')
-
--- insertion to dbo.ORDERS
-
-INSERT INTO dbo.ORDERS
-VALUES
-(33222, 'mickeyM@walla.co.il', 'Mickey H Mouse the 1st', 'United States, California, Disney Land, , , 00000001', '1999-03-16', 'Pickup from the factory', 'Klarna'),
-(33223, NULL, 'Laura Welch', 'United States, Texas, Alburkurky, Midland st., 8, 23615656', '2009-03-16', NULL, 'Klarna'),
-(33224, 'georgebush@gmail.com', 'George W. Bush', 'United States, Texas, Alburkurky, Saint st., 3, 23611356', '2015-08-19', NULL, 'ShopPay'),
-(33225, 'mickeyM@walla.co.il', 'Sargent Donald Duck', 'United States, California, Disney Land, , , 00000001', '2016-06-06', 'Fedex', 'ShopPay'),
-(33226, 'sophiada@post.bgu.ac.il', 'Goofy & Pluto', 'United States, California, Disney Land, , , 00000001', '2023-12-31', 'Fedex', 'ShopPay'),
-(33227, 'georgebush@gmail.com', 'George W. Bush', 'United States, Texas, Alburkurky, Saint st., 3, 23611356', '2024-01-05', 'Fedex', 'Klarna'),
-(33228, NULL, 'Laura Welch', 'United States, Texas, Alburkurky, Midland st., 8, 23615656', '2024-02-03', 'Private jet delivery', 'ShopPay')
-
--- insertion to dbo.INCLUSIONS
-
-INSERT INTO dbo.INCLUSIONS
-VALUES
-(33222, 'Custom: SnflwrGldn2, PprLB2', 3),
-(33222, 'Custom: Scln3, Fnl2, SnflrGldn3', 3),
-(33223, 'SUPER Fertilizer', 2),
-(33224, 'Pruning & Harvesting Scissors', 1),
-(33225, 'Light Salsa Garden', 20),
-(33226, 'Fennel', 60),
-(33227, 'Pruning & Harvesting Scissors', 5),
-(33228, 'Sunflower: Golden', 30)
 
 -- || DROPING OF TABLES SECTION ||
 
