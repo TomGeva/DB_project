@@ -78,16 +78,16 @@ CREATE TABLE dbo.GARDENS (		-- creating dbo.GARDENS table
 	CONSTRAINT	Fk_Name_Grdn	FOREIGN KEY		(Name)
 									REFERENCES	dbo.PRODUCTS	(Name)
 )
---FIX
-CREATE TABLE dbo.CHOSENS (		-- creating dbo.CHOSENS table
+
+CREATE TABLE dbo.PLANTED (		-- creating dbo.PLANTED table
 	Garden			Varchar(80)			NOT NULL,
 	Seed			Varchar(80)			NOT NULL,
 	Quantity		Tinyint				NOT NULL		DEFAULT 1,
 
-	CONSTRAINT	Pk_chosen		PRIMARY KEY		(Garden, Seed),
+	CONSTRAINT	Pk_PLANTED		PRIMARY KEY		(Garden, Seed),
 	CONSTRAINT	Fk_Garden		FOREIGN KEY		(Garden)
 									REFERENCES	dbo.GARDENS		(Name),
-	CONSTRAINT	Fk_Seed_chs		FOREIGN KEY		(Seed)
+	CONSTRAINT	Fk_SEEDS_PLT		FOREIGN KEY		(Seed)
 									REFERENCES	dbo.SEEDS		(Name)
 )
 
@@ -127,6 +127,32 @@ CREATE TABLE dbo.ORDERS (		-- creating dbo.ORDERS table
 	CONSTRAINT	Fk_dtls_ordr	FOREIGN KEY		(Name, Address)
 									REFERENCES	dbo.DETAILS		(Name, Address)
 )
+
+CREATE TABLE dbo.DESIGNS (		-- creating dbo.DESIGNS table
+	Name			Varchar(80)			NOT NULL,
+	DesignID		INT					NOT NULL,
+	OrderID 		INT					NOT NULL,
+	Quantity		Tinyint				NOT NULL		DEFAULT 1,
+
+	CONSTRAINT	Pk_DESIGNS		PRIMARY KEY		(Name, DesignID),
+	CONSTRAINT	Fk_ORDER_DSG	FOREIGN KEY		(OrderID)
+									REFERENCES	dbo.ORDERS		(OrderID)
+)
+
+CREATE TABLE dbo.CHOSENS (		-- creating dbo.CHOSENS table
+	Garden			Varchar(80)			NOT NULL,
+	Design			INT					NOT NULL,
+	Seed 			Varchar(80)			NOT NULL,
+	Quantity		Tinyint				NOT NULL		DEFAULT 1,
+
+	CONSTRAINT	Pk_CHOSENS		PRIMARY KEY		(Garden, Design, Seed),
+	CONSTRAINT	Fk_CHOSENS_DSG		FOREIGN KEY		(Garden, Design)
+									REFERENCES	dbo.DESIGNS		(Name, DesignID),
+	CONSTRAINT	Fk_CHOSENS_SEED		FOREIGN KEY		(Seed)
+									REFERENCES	dbo.SEEDS		(Name)
+)
+
+
 
 CREATE TABLE dbo.INCLUSIONS (	-- creating dbo.INCLUSIONS table
 	OrderID			Int					NOT NULL,
@@ -183,8 +209,16 @@ ALTER TABLE dbo.GARDENS
 
 -- constraint that inforces value of quantity
 
-ALTER TABLE dbo.CHOSENS --FIX
+ALTER TABLE dbo.CHOSENS 
 	ADD	CONSTRAINT	Ck_Quantity_chs
+			CHECK	(Quantity > 0)
+
+ALTER TABLE dbo.DESIGNS 
+	ADD	CONSTRAINT	Ck_Quantity_dsg
+			CHECK	(Quantity > 0)
+
+ALTER TABLE dbo.INCLUSIONS
+	ADD	CONSTRAINT	Ck_Quantity_ncl
 			CHECK	(Quantity > 0)
 
 -- add constraint to inforce phone# format
@@ -193,11 +227,16 @@ ALTER TABLE dbo.DETAILS
 	ADD	CONSTRAINT	Ck_Phone#
 			CHECK	(Phone# LIKE '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
 
--- add constraint to inforce values of quantity
+-- add constraint to inforce password restrictions
 
-ALTER TABLE dbo.INCLUSIONS
-	ADD	CONSTRAINT	Ck_Quantity_ncl
-			CHECK	(Quantity > 0)
+ALTER TABLE dbo.USERS
+	ADD	CONSTRAINT	Ck_Password
+			CHECK	(Password LIKE '%[0-9]' 
+						AND Password LIKE '%[A-Z]' 
+						AND Password LIKE '%[a-z]' 
+						AND Password LIKE '%[!@#$%^&*()_-=+`~/\|.,;:"]%' 
+						AND LEN([Password]) >= (8))
+
 
 -- || LOOKUP TABLES CREATION ||
 
@@ -264,12 +303,26 @@ ALTER TABLE dbo.DETAILS
 
 DROP TABLE dbo.DETAILS
 
+-- droping dbo.DESIGNS table and its constraints
+
+ALTER TABLE dbo.DESIGNS
+	DROP CONSTRAINT		Pk_DESIGNS, Fk_ORDER_DSG
+
+DROP TABLE dbo.DESIGNS
+
 -- droping dbo.CHOSENS table and its constraints
 
 ALTER TABLE dbo.CHOSENS
 	DROP CONSTRAINT		Pk_chosen, Fk_Garden, Fk_Seed_chs, Ck_Quantity_chs
 
 DROP TABLE dbo.CHOSENS
+
+-- droping dbo.PLANTED table and its constraints
+
+ALTER TABLE dbo.PLANTED
+	DROP CONSTRAINT		Pk_PLANTED, Fk_Garden, Fk_SEEDS_PLT
+
+DROP TABLE dbo.PLANTED
 
 -- droping dbo.GARDENS table and its constraints
 
