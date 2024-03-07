@@ -107,6 +107,18 @@ ORDER BY    Orders DESC
 
 /* PART 3 - Upgraded Nested Queries */
 
+/* 
+    Queary 1, removing details of someone, and if it is not mentioned in the database that it (the details) is in reference of anyone or any order delete it
+    economical goal: save money by using less of the database and therefor paying for less.
+*/
+
+
+
+/* 
+    Query 2, what are the top 10 seeds that were ordered within a garden this year, from gardens and from garden designs
+*/
+
+
 
 /* PART 4 - Window Functions */
 
