@@ -21,20 +21,19 @@ FROM dbo.PRODUCTS
     For each seed, how many of it were ordered within a garden as quantity, in the last month.
     NOTE TO SELF: IS GOOD. NEED TO ADD MORE DATA THAT'S RELEVANT FOR THIS QUERY.
 */
-SELECT      chn.Seed, 
-            SUM(chn.Quantity) AS total_seed_quan_ordered
-FROM        dbo.ORDERS AS ord
-            INNER JOIN dbo.INCLUSIONS AS inc
-                ON ord.OrderID = inc.OrderID
-            INNER JOIN dbo.GARDENS AS grd
-                ON inc.Name = grd.Name 
-            INNER JOIN dbo.CHOSENS AS chn
-                ON chn.Garden = grd.Name
+SELECT      [Seed Name] = PLT.Seed, 
+            [Total Seed Quantitity Ordered] = SUM(PLT.Quantity)
+FROM        dbo.ORDERS AS O
+            JOIN dbo.INCLUSIONS AS I
+                ON O.OrderID = I.OrderID
+            JOIN dbo.GARDENS AS G
+                ON I.Name = G.Name 
+            JOIN dbo.PLANTEDS AS PLT
+                ON PLT.Garden = G.Name
+WHERE       DATEDIFF(day, O.OrderDate, GETDATE()) <= 30 /* orders from the last 30 days */
+GROUP BY    PLT.Seed
+ORDER BY    [Total Seed Quantitity Ordered] DESC
 
-WHERE       DATEDIFF(day, ord.OrderDate, GETDATE()) <= 30 /* orders from the last 30 days */
-GROUP BY    chn.Seed
-ORDER BY    2 DESC
-;
 
 
 /*  
@@ -42,42 +41,40 @@ ORDER BY    2 DESC
     The motivation of knowing this information: Suggesting benefits and products for corporate clients.
  */ 
 SELECT      TOP 5
-            dts.Company, 
-            SUM((prd.Price - (prd.Price * prd.Discount/100)) * inc.Quantity) AS total_orders_price,
-            COUNT(ord.OrderID) AS count_orders
-FROM        dbo.ORDERS AS ord
-            INNER JOIN dbo.DETAILS AS dts
-                ON (ord.Address = dts.Address AND ord.Name = dts.Name)
-            INNER JOIN dbo.INCLUSIONS AS inc
-                ON inc.OrderID = ord.OrderID
-            INNER JOIN dbo.PRODUCTS AS prd
-                ON prd.Name = inc.Name
-            
-WHERE       dts.Company IS NOT NULL /* only corporate clients */
-GROUP BY    dts.Company
-ORDER BY    2 DESC
-;
+            Company = DTS.Company, 
+            [Total Orders Price] = SUM((PRD.Price - PRD.Discount) * I.Quantity),
+            Orders = COUNT(O.OrderID)
+FROM        dbo.ORDERS AS O
+            JOIN dbo.DETAILS AS DTS
+                ON (O.Address = DTS.Address AND O.Name = DTS.Name)
+            JOIN dbo.INCLUSIONS AS I
+                ON I.OrderID = O.OrderID
+            JOIN dbo.PRODUCTS AS PRD
+                ON PRD.Name = I.Name
+WHERE       DTS.Company IS NOT NULL /* only corporate clients */
+GROUP BY    DTS.Company
+ORDER BY    [Total Orders Price] DESC
+
 
 
 /* PART 2 - QUERIES WITH NESTING */
 
 /*
-    Find popular search words.
+    Find popular search words. (List)
     Motivaition: Detect trends and popular products
 */
 
-SELECT      words.search_word, COUNT(*) AS count_appearances
-FROM    
-            (
-                SELECT LOWER(value) AS search_word
-                FROM        dbo.SEARCHES
+SELECT      TOP 10 
+            W.searchWord, 
+            Appearances = COUNT(*)
+FROM        (
+                SELECT  searchWord = LOWER(value)
+                FROM    dbo.SEARCHES
                 CROSS APPLY STRING_SPLIT(Search_text, ' ')
-            ) words
-
-WHERE       LEN(words.search_word) > 3
-GROUP BY    words.search_word
-ORDER BY    2
-;
+            ) AS W
+WHERE       LEN(W.searchWord) > 3
+GROUP BY    W.searchWord
+ORDER BY    Appearances DESC
 
 
 /*
@@ -85,28 +82,27 @@ ORDER BY    2
     Motivation: Post advertisments and discounts on the website on those week days.
 */
 
-SELECT      DATENAME(WEEKDAY, ord.OrderDate) AS order_week_day, COUNT(*) AS num_of_orders
-FROM        dbo.ORDERS AS ord    
-            INNER JOIN dbo.INCLUSIONS AS inc
-                ON inc.OrderID = ord.OrderID
-            INNER JOIN dbo.PRODUCTS AS prd
-                ON prd.Name = inc.Name
-WHERE       (prd.Price - (prd.Price * prd.Discount / 100)) * inc.Quantity > ( /* select orders that their total price is above average */
-
-                                            SELECT  AVG(ord_prices.order_price) AS avg_order_price /* calculate average order price */
-                                            FROM
-                                                (   /* calculate total price for each order */
-                                                    SELECT  inc1.OrderID, SUM((prd1.Price - (prd1.Price * prd1.Discount/100)) * inc1.Quantity) AS order_price
-                                                    FROM dbo.INCLUSIONS AS inc1
-                                                    INNER JOIN dbo.PRODUCTS AS prd1
-                                                        ON prd1.Name = inc1.Name
-                                                    GROUP BY inc1.OrderID         
-
-                                                ) AS ord_prices
-                                            
-                                            )
-GROUP BY    DATENAME(WEEKDAY, ord.OrderDate)
-;
+SELECT      [Week Day] = DATENAME(WEEKDAY, O.OrderDate), 
+            Orders = COUNT(*)
+FROM        dbo.ORDERS AS O    
+            JOIN dbo.INCLUSIONS AS I
+                ON I.OrderID = O.OrderID
+            JOIN dbo.PRODUCTS AS PRD
+                ON PRD.Name = I.Name
+WHERE       (PRD.Price - (PRD.Price * PRD.Discount / 100)) * I.Quantity > ( /* select orders that their total price is above average */
+                SELECT  AveragePrc = AVG(OPrc.order_price)/* calculate average order price */
+                FROM
+                        (   /* calculate total price for each order */
+                            SELECT  I1.OrderID, 
+                                    order_price = SUM((PRD1.Price - (PRD1.Price * PRD1.Discount/100)) * I1.Quantity)
+                            FROM    dbo.INCLUSIONS AS I1
+                            JOIN    dbo.PRODUCTS AS PRD1
+                                ON PRD1.Name = I1.Name
+                            GROUP BY I1.OrderID         
+                        ) AS OPrc
+            )
+GROUP BY    DATENAME(WEEKDAY, O.OrderDate)
+ORDER BY    Orders DESC
 
 
 /* PART 3 - Upgraded Nested Queries */
