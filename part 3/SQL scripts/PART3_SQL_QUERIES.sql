@@ -39,19 +39,25 @@ ORDER BY    [Total Seed Quantitity Ordered] DESC
 /*  
     Find TOP 5 companies by total orders price.
     The motivation of knowing this information: Suggesting benefits and products for corporate clients that frequently buy things from the site for the last 6 months
-    ADD TIME FRAME
  */ 
 SELECT      TOP 5
             Company = DTS.Company, 
-            [Total Orders Price] = SUM((PRD.Price - PRD.Discount) * I.Quantity), 
+            [Total Orders Price] = SUM( CASE WHEN PRD.Price IS NOT NULL THEN (PRD.Price - PRD.Discount) * I.Quantity ELSE 0 END) + 
+                                    SUM( CASE WHEN PRD1.Price IS NOT NULL THEN (PRD1.Price - PRD1.Discount) * DSG.Quantity ELSE 0 END), 
             Orders = COUNT(O.OrderID)
 FROM        dbo.ORDERS AS O
             JOIN dbo.DETAILS AS DTS
-                ON (O.Address = DTS.Address AND O.Name = DTS.Name) -- Maybe change to phone numbers? guarantees uniqness
-            JOIN dbo.INCLUSIONS AS I
+                ON (O.Address = DTS.Address AND O.Name = DTS.Name) 
+            LEFT JOIN dbo.INCLUSIONS AS I
                 ON I.OrderID = O.OrderID
             JOIN dbo.PRODUCTS AS PRD
                 ON PRD.Name = I.Name
+            LEFT JOIN dbo.DESIGNS AS DSG
+                ON O.OrderID = DSG.OrderID
+            JOIN dbo.GARDENS AS G
+                ON G.Name = DSG.Name
+            JOIN dbo.PRODUCTS AS PRD1
+                ON PRD1.Name = G.Name
 WHERE       DTS.Company IS NOT NULL /* only corporate clients */
             AND DATEDIFF(MONTH, O.OrderDate, GETDATE()) <= 6 /* orders from the last 6 months */
 GROUP BY    DTS.Company
@@ -80,8 +86,8 @@ ORDER BY    Appearances DESC
 
 
 /*
-    Which week days had the most orders above the average price?
-    Motivation: Post advertisments and discounts on the website on those week days.
+    Which months of the year are the buissiest on avg? 
+    Motivation: Post advertisments and discounts on the website on those months.
 */
 
 SELECT      [Week Day] = DATENAME(WEEKDAY, O.OrderDate), 
@@ -91,12 +97,12 @@ FROM        dbo.ORDERS AS O
                 ON I.OrderID = O.OrderID
             JOIN dbo.PRODUCTS AS PRD
                 ON PRD.Name = I.Name
-WHERE       (PRD.Price - (PRD.Price * PRD.Discount / 100)) * I.Quantity > ( /* select orders that their total price is above average */ --??
+WHERE       (PRD.Price - PRD.Discount) * I.Quantity > ( /* select orders that their total price is above average */ 
                 SELECT  AveragePrc = AVG(OPrc.order_price)/* calculate average order price */
                 FROM
                         (   /* calculate total price for each order */
                             SELECT  I1.OrderID, 
-                                    order_price = SUM((PRD1.Price - (PRD1.Price * PRD1.Discount/100)) * I1.Quantity) --WHAT??
+                                    order_price = SUM((PRD1.Price - PRD1.Discount) * I1.Quantity) 
                             FROM    dbo.INCLUSIONS AS I1
                             JOIN    dbo.PRODUCTS AS PRD1
                                 ON PRD1.Name = I1.Name
