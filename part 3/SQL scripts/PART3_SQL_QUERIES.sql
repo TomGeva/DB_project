@@ -90,28 +90,29 @@ ORDER BY    Appearances DESC
     Motivation: Post advertisments and discounts on the website on those months.
 */
 
-SELECT      [Week Day] = DATENAME(WEEKDAY, O.OrderDate), 
-            Orders = COUNT(*)
-FROM        dbo.ORDERS AS O    
-            JOIN dbo.INCLUSIONS AS I
-                ON I.OrderID = O.OrderID
-            JOIN dbo.PRODUCTS AS PRD
-                ON PRD.Name = I.Name
-WHERE       (PRD.Price - PRD.Discount) * I.Quantity > ( /* select orders that their total price is above average */ 
-                SELECT  AveragePrc = AVG(OPrc.order_price)/* calculate average order price */
-                FROM
-                        (   /* calculate total price for each order */
-                            SELECT  I1.OrderID, 
-                                    order_price = SUM((PRD1.Price - PRD1.Discount) * I1.Quantity) 
-                            FROM    dbo.INCLUSIONS AS I1
-                            JOIN    dbo.PRODUCTS AS PRD1
-                                ON PRD1.Name = I1.Name
-                            GROUP BY I1.OrderID         
-                        ) AS OPrc
+SELECT      [Average Orders] = AVG(Orders),
+            [Month]
+FROM        (
+            SELECT      Orders = COUNT(*),
+                        [Year] = YEAR(O.OrderDate),
+                        [Month] = DATENAME(MONTH, O.OrderDate)
+            FROM        dbo.ORDERS AS O
+            WHERE       DATEDIFF(MONTH, O.OrderDate, GETDATE()) <= 60 /* orders from the last 5 years */
+            GROUP BY    YEAR(O.OrderDate), DATENAME(MONTH, O.OrderDate)
+            ) As OMonth
+GROUP BY    [Month]
+HAVING      AVG(Orders) > ( /* select months that their average orders is above the average of all months */
+                SELECT  AVG(Orders1)
+                FROM    (
+                        SELECT      Orders1 = COUNT(*),
+                                    [Year1] = YEAR(O1.OrderDate),
+                                    [Month1] = DATENAME(MONTH, O1.OrderDate)
+                        FROM        dbo.ORDERS AS O1
+                        WHERE       DATEDIFF(MONTH, O1.OrderDate, GETDATE()) <= 60 /* orders from the last 5 years */
+                        GROUP BY    YEAR(O1.OrderDate), DATENAME(MONTH, O1.OrderDate)
+                        ) As OAVG
             )
-GROUP BY    DATENAME(WEEKDAY, O.OrderDate)
-ORDER BY    Orders DESC
-
+ORDER BY    [Average Orders] DESC
 
 /* PART 3 - Upgraded Nested Queries */
 
@@ -131,65 +132,34 @@ ORDER BY    Orders DESC
 /* PART 4 - Window Functions */
 
 /* 
-    Present TOP 3 seeds (with climate details: sun amount and season) that were sold within per State and City.
-    Motivation: Adjust seed marketing per geography / Think of new seeds to sell.
+    Present TOP 3 seeds (with climate details: sun amount and season) that were sold within each State and City.
+    Motivation: Adjust seed and garden marketing per geography in style of discounts, advertisments and more.
 
     NOTE: MIGHT NEED SOME CHANGES IN THE TABLES BECAUSE OF THE ADDITION OF "DESIGN" WEAK ENTITY.
 
 */
--- NOT WORKING
-SELECT ordered_quants.*
+
+SELECT * 
 FROM
 (
-    SELECT      ord_geo.OrderID, ord_geo.State, ord_geo.City, 
-                chn.Seed, sd.Season, sd.Sun_amount, total_ordered_quantity = SUM(chn.Quantity),
-                Rank() over (Partition BY ord_geo.State, ord_geo.City Order BY SUM(chn.Quantity) DESC) AS quantity_rank
-    FROM        (
-                SELECT      OrderID, 
-                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
-                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City
-                FROM        dbo.ORDERS
-                ) AS ord_geo
-                INNER JOIN  dbo.INCLUSIONS AS inc
-                    ON inc.OrderID = ord_geo.OrderID
-                INNER JOIN dbo.CHOSENS AS chn
-                    ON chn.Garden = inc.Name
-                INNER JOIN dbo.SEEDS AS sd
-                    ON sd.Name = chn.Seed
-    GROUP BY    ord_geo.OrderID, ord_geo.State, ord_geo.City, chn.Seed, sd.Season, sd.Sun_amount
-) AS ordered_quants
-
-WHERE       ordered_quants.quantity_rank <= 3  --For top 3 seeds
-
-ORDER BY    ordered_quants.State, ordered_quants.City, ordered_quants.total_ordered_quantity DESC
-;
-
-
---TTTTTTTTYYYYYUUUUUUUUUTTTTTTTAAAAAAAA by Yulie 
-SELECT ordered_quants.* -- is nesting really needed here?
-FROM
-(
-    SELECT      ord_geo.OrderID, ord_geo.State, ord_geo.City, 
+    SELECT      ordState.State, 
                 inc.Name, sd.Season, sd.Sun_amount, total_ordered_quantity = SUM(inc.Quantity),
-                Rank() over (Partition BY ord_geo.State, ord_geo.City Order BY SUM(inc.Quantity) DESC) AS quantity_rank
+                ROW_NUMBER() over (Partition BY ordState.State Order BY SUM(inc.Quantity) DESC) AS quantity_rank
     FROM        (
-                SELECT      OrderID, 
-                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
-                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City
-                FROM        dbo.ORDERS
-                ) AS ord_geo
+                    SELECT      OrderID, 
+                                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State
+                    FROM        dbo.ORDERS
+                ) AS ordState
                 INNER JOIN  dbo.INCLUSIONS AS inc
-                    ON inc.OrderID = ord_geo.OrderID
+                    ON inc.OrderID = ordState.OrderID
                 INNER JOIN dbo.SEEDS AS sd
                     ON sd.Name = inc.Name
-    GROUP BY    ord_geo.OrderID, ord_geo.State, ord_geo.City, inc.Name, sd.Season, sd.Sun_amount
+    GROUP BY    ordState.State, inc.Name, sd.Season, sd.Sun_amount
 ) AS ordered_quants
 
-WHERE       ordered_quants.quantity_rank <= 3
+WHERE       quantity_rank <= 3
 
-ORDER BY    ordered_quants.State, ordered_quants.City, ordered_quants.total_ordered_quantity DESC
-;
--- finish TTTTTTTTYYYYYUUUUUUUUUTTTTTTTAAAAAAAA
+ORDER BY    State, City, total_ordered_quantity DESC
 
 /* 
     Per User: Calculate Avg. Days gap between orders and amount of days since last order.
