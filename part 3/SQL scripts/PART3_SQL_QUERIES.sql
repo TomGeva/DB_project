@@ -38,20 +38,22 @@ ORDER BY    [Total Seed Quantitity Ordered] DESC
 
 /*  
     Find TOP 5 companies by total orders price.
-    The motivation of knowing this information: Suggesting benefits and products for corporate clients.
+    The motivation of knowing this information: Suggesting benefits and products for corporate clients that frequently buy things from the site for the last 6 months
+    ADD TIME FRAME
  */ 
 SELECT      TOP 5
             Company = DTS.Company, 
-            [Total Orders Price] = SUM((PRD.Price - PRD.Discount) * I.Quantity),
+            [Total Orders Price] = SUM((PRD.Price - PRD.Discount) * I.Quantity), 
             Orders = COUNT(O.OrderID)
 FROM        dbo.ORDERS AS O
             JOIN dbo.DETAILS AS DTS
-                ON (O.Address = DTS.Address AND O.Name = DTS.Name)
+                ON (O.Address = DTS.Address AND O.Name = DTS.Name) -- Maybe change to phone numbers? guarantees uniqness
             JOIN dbo.INCLUSIONS AS I
                 ON I.OrderID = O.OrderID
             JOIN dbo.PRODUCTS AS PRD
                 ON PRD.Name = I.Name
 WHERE       DTS.Company IS NOT NULL /* only corporate clients */
+            AND DATEDIFF(MONTH, O.OrderDate, GETDATE()) <= 6 /* orders from the last 6 months */
 GROUP BY    DTS.Company
 ORDER BY    [Total Orders Price] DESC
 
@@ -89,12 +91,12 @@ FROM        dbo.ORDERS AS O
                 ON I.OrderID = O.OrderID
             JOIN dbo.PRODUCTS AS PRD
                 ON PRD.Name = I.Name
-WHERE       (PRD.Price - (PRD.Price * PRD.Discount / 100)) * I.Quantity > ( /* select orders that their total price is above average */
+WHERE       (PRD.Price - (PRD.Price * PRD.Discount / 100)) * I.Quantity > ( /* select orders that their total price is above average */ --??
                 SELECT  AveragePrc = AVG(OPrc.order_price)/* calculate average order price */
                 FROM
                         (   /* calculate total price for each order */
                             SELECT  I1.OrderID, 
-                                    order_price = SUM((PRD1.Price - (PRD1.Price * PRD1.Discount/100)) * I1.Quantity)
+                                    order_price = SUM((PRD1.Price - (PRD1.Price * PRD1.Discount/100)) * I1.Quantity) --WHAT??
                             FROM    dbo.INCLUSIONS AS I1
                             JOIN    dbo.PRODUCTS AS PRD1
                                 ON PRD1.Name = I1.Name
@@ -129,12 +131,12 @@ ORDER BY    Orders DESC
     NOTE: MIGHT NEED SOME CHANGES IN THE TABLES BECAUSE OF THE ADDITION OF "DESIGN" WEAK ENTITY.
 
 */
-
+-- NOT WORKING
 SELECT ordered_quants.*
 FROM
 (
     SELECT      ord_geo.OrderID, ord_geo.State, ord_geo.City, 
-                chn.Seed, sd.Season, sd.Sun_amount, SUM(chn.Quantity) AS total_ordered_quantity,
+                chn.Seed, sd.Season, sd.Sun_amount, total_ordered_quantity = SUM(chn.Quantity),
                 Rank() over (Partition BY ord_geo.State, ord_geo.City Order BY SUM(chn.Quantity) DESC) AS quantity_rank
     FROM        (
                 SELECT      OrderID, 
@@ -151,11 +153,37 @@ FROM
     GROUP BY    ord_geo.OrderID, ord_geo.State, ord_geo.City, chn.Seed, sd.Season, sd.Sun_amount
 ) AS ordered_quants
 
-WHERE       ordered_quants.quantity_rank <= 3
+WHERE       ordered_quants.quantity_rank <= 3  --For top 3 seeds
 
 ORDER BY    ordered_quants.State, ordered_quants.City, ordered_quants.total_ordered_quantity DESC
 ;
 
+
+--TTTTTTTTYYYYYUUUUUUUUUTTTTTTTAAAAAAAA by Yulie 
+SELECT ordered_quants.* -- is nesting really needed here?
+FROM
+(
+    SELECT      ord_geo.OrderID, ord_geo.State, ord_geo.City, 
+                inc.Name, sd.Season, sd.Sun_amount, total_ordered_quantity = SUM(inc.Quantity),
+                Rank() over (Partition BY ord_geo.State, ord_geo.City Order BY SUM(inc.Quantity) DESC) AS quantity_rank
+    FROM        (
+                SELECT      OrderID, 
+                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City
+                FROM        dbo.ORDERS
+                ) AS ord_geo
+                INNER JOIN  dbo.INCLUSIONS AS inc
+                    ON inc.OrderID = ord_geo.OrderID
+                INNER JOIN dbo.SEEDS AS sd
+                    ON sd.Name = inc.Name
+    GROUP BY    ord_geo.OrderID, ord_geo.State, ord_geo.City, inc.Name, sd.Season, sd.Sun_amount
+) AS ordered_quants
+
+WHERE       ordered_quants.quantity_rank <= 3
+
+ORDER BY    ordered_quants.State, ordered_quants.City, ordered_quants.total_ordered_quantity DESC
+;
+-- finish TTTTTTTTYYYYYUUUUUUUUUTTTTTTTAAAAAAAA
 
 /* 
     Per User: Calculate Avg. Days gap between orders and amount of days since last order.
@@ -167,7 +195,7 @@ ORDER BY    ordered_quants.State, ordered_quants.City, ordered_quants.total_orde
 SELECT  Email, OrderID, OrderDate,
         Orders_Per_User = COUNT(OrderID) OVER (PARTITION BY Email),
         Total_Avg_orders_time_gap = AVG(Difference_in_Days) OVER (),
-        Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email),
+        Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email), 
         Days_from_Last_User_Order,
         Estimated_Days_to_Next_Order = AVG(Difference_in_Days) OVER (PARTITION BY Email) - Days_from_Last_User_Order
     

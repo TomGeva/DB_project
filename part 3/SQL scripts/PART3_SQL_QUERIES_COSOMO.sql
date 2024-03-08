@@ -163,6 +163,7 @@ CREATE TABLE dbo.INCLUSIONS (	-- creating dbo.INCLUSIONS table
 )
 
 
+--Add checks
 
 ALTER TABLE dbo.PRODUCTS
 	ADD	CONSTRAINT	Ck_Price
@@ -225,6 +226,7 @@ ALTER TABLE dbo.INCLUSIONS
 			CHECK	(Quantity > 0)
 
 
+--Create lookup tables
 
 CREATE TABLE dbo.SEEDTYPELOOKUP (
 	Type			Varchar(20)		PRIMARY KEY		NOT NULL
