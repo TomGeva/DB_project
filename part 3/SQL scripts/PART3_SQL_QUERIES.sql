@@ -43,35 +43,17 @@ HAVING      SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 1 THEN C.Qua
             OR SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 13 THEN C.Quantity*DSG.Quantity ELSE 0 END) > 0
 ORDER BY    [Seed Quantitity Of Last Month] DESC, [Seed Quantitity Of Year Before]
 
-/*  
-    who are the 5 companies that pay the most by total orders price.
-    Motivation: Suggesting benefits and products for corporate clients that frequently buy things from the site for the last 6 months
-*/ 
+/*
+    How many purcheses were made with each personalized garden type from the past year?
+    Motivation: To estimarte how many gardens to build this year from each type.
+*/
 
-/* NOT GOOD..., HAS DOUBLE COUNTING, to avoid double counting we need nesting...*/
-SELECT      TOP 5
-            Company = DTS.Company, 
-            [Total Orders Price] = SUM( CASE WHEN PRD.Price IS NOT NULL THEN (PRD.Price - PRD.Discount) * I.Quantity ELSE 0 END) + 
-                                   SUM( CASE WHEN PRD1.Price IS NOT NULL THEN (PRD1.Price - PRD1.Discount) * DSG.Quantity ELSE 0 END), 
-            Orders = COUNT(O.OrderID)
-FROM        dbo.ORDERS AS O
-            LEFT JOIN dbo.INCLUSIONS AS I
-                ON I.OrderID = O.OrderID
-            LEFT JOIN dbo.PRODUCTS AS PRD
-                ON PRD.Name = I.Name
-            LEFT JOIN dbo.DESIGNS AS DSG
-                ON O.OrderID = DSG.OrderID
-            LEFT JOIN dbo.GARDENS AS G
-                ON G.Name = DSG.Name
-            LEFT JOIN dbo.PRODUCTS AS PRD1
-                ON PRD1.Name = G.Name
-            LEFT JOIN dbo.DETAILS AS DTS
-                ON (O.Address = DTS.Address AND O.Name = DTS.Name)
-WHERE       DTS.Company IS NOT NULL
-            AND DATEDIFF(MONTH, O.OrderDate, GETDATE()) <= 6
-GROUP BY    DTS.Company
-ORDER BY    [Total Orders Price] DESC
-
+SELECT D.Name,
+        [Total Orders] = COUNT(*)
+FROM DBO.DESIGNS AS D JOIN DBO.ORDERS AS O ON D.OrderID = O.OrderID
+WHERE DATEDIFF(DAY,O.OrderDate, GETDATE()) <= 365 
+GROUP BY D.Name
+ORDER BY [Total Orders] DESC
 
 
 /* PART 2 - QUERIES WITH NESTING */
