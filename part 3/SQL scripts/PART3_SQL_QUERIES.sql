@@ -28,7 +28,6 @@ FROM dbo.PRODUCTS
 
 /* 
     for every seed, what is the quantity that was ordered as a part of a designed garden, in the last month and in the same month a year before
-    NOTE TO SELF: IS GOOD. NEED TO ADD MORE DATA THAT'S RELEVANT FOR THIS QUERY.
 */
 SELECT      [Seed Name] = C.Seed, 
             [Seed Quantitity Of Last Month] = SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 1 THEN C.Quantity*DSG.Quantity ELSE 0 END),
@@ -291,8 +290,9 @@ FROM
         - popularity trends and how they affect the income. (need to think how to calculate this, maybe using the connection between the items within the same order or something.)
 
 needs more planning, after planning should start implementing, and reasoning why cannot be made simply without using with clause.
-
 */
+
+
 
 
 /* 
@@ -354,7 +354,7 @@ FROM        dbo.RESULTS AS rs
 WHERE       DATEDIFF(N, rs.SearchDT, ord.OrderDate) < 5
 GROUP BY    DATENAME(WEEKDAY, ord.OrderDate)
 ORDER BY    2 DESC
-;
+
 
 
 /* 
@@ -372,5 +372,5 @@ FROM        dbo.INCLUSIONS AS inc
                 ON inc.OrderID = ord.OrderID
 GROUP BY    CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(ord.Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128))
 ORDER BY    2 DESC
-;
+
 
