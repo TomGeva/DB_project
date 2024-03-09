@@ -246,22 +246,29 @@ ORDER BY    State, total_ordered_quantity DESC
     Also calculate total Avg. Days gap between orders.
     Motivation: Market analysis, detect demand rate and plan manufacturing rates / advertisment
 */
-
-SELECT  Email, OrderID, OrderDate,
-        Orders_Per_User = COUNT(OrderID) OVER (PARTITION BY Email),
-        Total_Avg_orders_time_gap = AVG(Difference_in_Days) OVER (),
-        Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email), 
-        Days_from_Last_User_Order,
-        Estimated_Days_to_Next_Order = AVG(Difference_in_Days) OVER (PARTITION BY Email) - Days_from_Last_User_Order    
-FROM
+SELECT *
+FROM 
     (
-        SELECT Ord.Email, Ord.OrderID, Ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email) AS Next_Order_Date,
-            DATEDIFF(day, ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email)) AS Difference_in_Days,
-            Last_User_Order_Date = LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email),
-            Days_from_Last_User_Order = DATEDIFF(day, LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email), GETDATE())
-        FROM dbo.ORDERS AS ord
-        WHERE ord.Email IS NOT NULL
-    ) AS next_ords
+    SELECT  DISTINCT Email, Order_Date = MAX(OrderDate) OVER (PARTITION BY Email),
+            Orders_Per_User = COUNT(OrderID) OVER (PARTITION BY Email),
+            Total_Avg_orders_time_gap = AVG(Difference_in_Days) OVER (),
+            Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email), 
+            Days_from_Last_User_Order,
+            Estimated_Days_to_Next_Order = AVG(Difference_in_Days) OVER (PARTITION BY Email) - Days_from_Last_User_Order    
+    FROM
+        (
+            SELECT Ord.Email, Ord.OrderID, Ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email) AS Next_Order_Date,
+                DATEDIFF(day, ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email)) AS Difference_in_Days,
+                Last_User_Order_Date = LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email),
+                Days_from_Last_User_Order = DATEDIFF(day, LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email), GETDATE())
+            FROM dbo.ORDERS AS ord
+            WHERE ord.Email IS NOT NULL 
+        ) AS next_ords
+    ) AS C
+WHERE Estimated_Days_to_Next_Order > 0
+ORDER BY Estimated_Days_to_Next_Order DESC
+
+
 
 /* PART 5 - WITH QUERY */
 
