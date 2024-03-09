@@ -13,53 +13,62 @@ FROM dbo.GARDENS
 SELECT TOP (1000) *
 FROM dbo.PRODUCTS
 
+/*
+5. for each self design garden and for every month in the last 3 months, what is the amount of designs made and how many unique seeds were included within the designs in average.
+6. for each quarter of the year for the last 3 years, who are the 3 most active users (in terms of orders and searches as long as they made an order), what type of product did they order the most of (seed, premade garden, self design garden, simple product) and what is the average price of their orders.
+7. what are the 10 most/least justified relations in the last year. (a relation is more justified if the 2 products within this relation were ordered togehter in the same order the most)
+ */
+
+
 
 
 /* PART 1 - 2 QUERIES WITH NO NESTING */
 
+-- need one more, first is good, second has double counting and cannot be without nesting
+
 /* 
-    For each seed, how many of it were ordered within a garden as quantity, in the last month.
+    for every seed, what is the quantity that was ordered as a part of a designed garden, in the last month and in the same month a year before
     NOTE TO SELF: IS GOOD. NEED TO ADD MORE DATA THAT'S RELEVANT FOR THIS QUERY.
 */
-SELECT      [Seed Name] = PLT.Seed, 
-            [Total Seed Quantitity Ordered] = SUM(PLT.Quantity)
+SELECT      [Seed Name] = C.Seed, 
+            [Seed Quantitity Of Last Month] = SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 1 THEN C.Quantity*DSG.Quantity ELSE 0 END),
+            [Seed Quantitity Of Year Before] = SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 13 THEN C.Quantity*DSG.Quantity ELSE 0 END)
 FROM        dbo.ORDERS AS O
-            JOIN dbo.INCLUSIONS AS I
-                ON O.OrderID = I.OrderID
-            JOIN dbo.GARDENS AS G
-                ON I.Name = G.Name 
-            JOIN dbo.PLANTEDS AS PLT
-                ON PLT.Garden = G.Name
-WHERE       DATEDIFF(day, O.OrderDate, GETDATE()) <= 30 /* orders from the last 30 days */
-GROUP BY    PLT.Seed
-ORDER BY    [Total Seed Quantitity Ordered] DESC
-
-
+            JOIN dbo.DESIGNS as DSG
+                ON O.OrderID = DSG.OrderID
+            JOIN dbo.CHOSENS AS C
+                ON DSG.Name = C.Garden AND DSG.DesignID = C.Design 
+GROUP BY    C.Seed
+HAVING      SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 1 THEN C.Quantity*DSG.Quantity ELSE 0 END) > 0
+            OR SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 13 THEN C.Quantity*DSG.Quantity ELSE 0 END) > 0
+ORDER BY    [Seed Quantitity Of Last Month] DESC, [Seed Quantitity Of Year Before]
 
 /*  
-    Find TOP 5 companies by total orders price.
-    The motivation of knowing this information: Suggesting benefits and products for corporate clients that frequently buy things from the site for the last 6 months
- */ 
+    who are the 5 companies that pay the most by total orders price.
+    Motivation: Suggesting benefits and products for corporate clients that frequently buy things from the site for the last 6 months
+*/ 
+
+/* NOT GOOD..., HAS DOUBLE COUNTING, to avoid double counting we need nesting...*/
 SELECT      TOP 5
             Company = DTS.Company, 
             [Total Orders Price] = SUM( CASE WHEN PRD.Price IS NOT NULL THEN (PRD.Price - PRD.Discount) * I.Quantity ELSE 0 END) + 
-                                    SUM( CASE WHEN PRD1.Price IS NOT NULL THEN (PRD1.Price - PRD1.Discount) * DSG.Quantity ELSE 0 END), 
+                                   SUM( CASE WHEN PRD1.Price IS NOT NULL THEN (PRD1.Price - PRD1.Discount) * DSG.Quantity ELSE 0 END), 
             Orders = COUNT(O.OrderID)
 FROM        dbo.ORDERS AS O
-            JOIN dbo.DETAILS AS DTS
-                ON (O.Address = DTS.Address AND O.Name = DTS.Name) 
             LEFT JOIN dbo.INCLUSIONS AS I
                 ON I.OrderID = O.OrderID
-            JOIN dbo.PRODUCTS AS PRD
+            LEFT JOIN dbo.PRODUCTS AS PRD
                 ON PRD.Name = I.Name
             LEFT JOIN dbo.DESIGNS AS DSG
                 ON O.OrderID = DSG.OrderID
-            JOIN dbo.GARDENS AS G
+            LEFT JOIN dbo.GARDENS AS G
                 ON G.Name = DSG.Name
-            JOIN dbo.PRODUCTS AS PRD1
+            LEFT JOIN dbo.PRODUCTS AS PRD1
                 ON PRD1.Name = G.Name
-WHERE       DTS.Company IS NOT NULL /* only corporate clients */
-            AND DATEDIFF(MONTH, O.OrderDate, GETDATE()) <= 6 /* orders from the last 6 months */
+            LEFT JOIN dbo.DETAILS AS DTS
+                ON (O.Address = DTS.Address AND O.Name = DTS.Name)
+WHERE       DTS.Company IS NOT NULL
+            AND DATEDIFF(MONTH, O.OrderDate, GETDATE()) <= 6
 GROUP BY    DTS.Company
 ORDER BY    [Total Orders Price] DESC
 
@@ -67,12 +76,14 @@ ORDER BY    [Total Orders Price] DESC
 
 /* PART 2 - QUERIES WITH NESTING */
 
+-- complete
+
 /*
-    Find popular search words. (List)
-    Motivaition: Detect trends and popular products
+    find popular search words.
+    Motivaition: detect popular products and trends that could be incorporated into advertisement.
 */
 
-SELECT      TOP 10 
+SELECT      TOP 15 
             W.searchWord, 
             Appearances = COUNT(*)
 FROM        (
@@ -116,20 +127,106 @@ ORDER BY    [Average Orders] DESC
 
 /* PART 3 - Upgraded Nested Queries */
 
-/* 
-    Queary 1, removing details of someone, and if it is not mentioned in the database that it (the details) is in reference of anyone or any order delete it
-    economical goal: save money by using less of the database and therefor paying for less.
-*/
-
-
+-- complete
 
 /* 
-    Query 2, what are the top 10 seeds that were ordered within a garden this year, from gardens and from garden designs
+    Queary 1, deletion of relations between products, if in last 3 years there were no orders that include the 2 products that have a relation metioned about them, the relation should be deleted
+    this, not including seeds that are a part of a garden.
 */
 
+DELETE  FROM dbo.RELATIONS
+WHERE   CONCAT(Product1, Product2) NOT IN   (
+                                                SELECT  CONCAT(RLT.Product1, RLT.Product2)
+                                                FROM    dbo.RELATIONS AS RLT
+                                                        JOIN dbo.INCLUSIONS AS I1
+                                                            ON RLT.Product1 = I1.Name
+                                                        JOIN dbo.INCLUSIONS AS I2
+                                                            ON RLT.Product2 = I2.Name
+                                                        JOIN dbo.ORDERS AS O
+                                                            ON I1.OrderID = O.OrderID
+                                                WHERE I1.OrderID = I2.OrderID AND DATEDIFF(YEAR,O.OrderDate, GETDATE()) BETWEEN 1 AND 3
+                                            )
 
+
+/* to reset RELATIONS */
+DELETE FROM dbo.RELATIONS
+INSERT INTO dbo.RELATIONS (Product1, Product2) SELECT * FROM dbo.RELATIONS_
+
+/* 
+    Query 2, Yearly-Quarter performance report of seeds of type Root Vegetables
+*/
+
+SELECT      [Seed_Name] = Seed,
+            [Year] = YEAR(OrderDate),
+            [Quarter] = DATEPART(QUARTER, OrderDate),
+            [Total Quantity] = SUM(Quantity),
+            [Total Orders] = COUNT(OrderID),
+            [Avg Quantity per Order] = ROUND(AVG(CAST(Quantity AS FLOAT)),2)
+FROM    (
+            SELECT      Seed = C.Seed,
+                        OrderID = O.OrderID,
+                        OrderDate = O.OrderDate,
+                        Quantity = C.Quantity*DSG.Quantity,
+                        [Type] = ST.[Type]
+            FROM        dbo.CHOSENS AS C
+                        JOIN dbo.DESIGNS AS DSG
+                            ON C.Design = DSG.DesignID
+                        JOIN dbo.ORDERS AS O
+                            ON DSG.OrderID = O.OrderID
+                        JOIN dbo.SEEDS AS SD
+                            ON C.Seed = SD.Name
+                        JOIN dbo.SEED_TYPES AS ST
+                            ON SD.Name = ST.Name
+        UNION 
+            SELECT      Seed = I.Name,
+                        OrderID = O.OrderID,
+                        OrderDate = O.OrderDate,
+                        Quantity = I.Quantity,
+                        [Type] = ST.[Type]
+            FROM        dbo.INCLUSIONS AS I
+                        JOIN dbo.ORDERS AS O
+                            ON I.OrderID = O.OrderID
+                        JOIN dbo.SEEDS AS SD
+                            ON I.Name = SD.Name
+                        JOIN dbo.SEED_TYPES AS ST
+                            ON SD.Name = ST.Name
+        UNION 
+            SELECT      Seed = PLT.Seed,
+                        OrderID = O.OrderID,
+                        OrderDate = O.OrderDate,
+                        Quantity = PLT.Quantity*I.Quantity,
+                        [Type] = ST.[Type]
+            FROM        dbo.PLANTEDS AS PLT
+                        JOIN dbo.GARDENS AS G
+                            ON PLT.Garden = G.Name
+                        JOIN dbo.PRODUCTS AS PRD
+                            ON G.Name = PRD.Name
+                        JOIN dbo.INCLUSIONS AS I
+                            ON PRD.Name = I.Name
+                        JOIN dbo.ORDERS AS O
+                            ON I.OrderID = O.OrderID
+                        JOIN dbo.SEEDS AS SD
+                            ON PLT.Seed = SD.Name
+                        JOIN dbo.SEED_TYPES AS ST
+                            ON SD.Name = ST.Name
+        ) AS SDByOrd
+        WHERE       DATEDIFF(QUARTER, OrderDate, GETDATE()) <= 4 AND DATEDIFF(QUARTER, OrderDate, GETDATE()) > 0 AND [Type] = 'Root Vegetables'
+GROUP BY    Seed, YEAR(OrderDate), DATEPART(QUARTER, OrderDate)
+ORDER BY    YEAR(OrderDate), DATEPART(QUARTER, OrderDate), [Total Quantity] DESC
 
 /* PART 4 - Window Functions */
+
+/*
+    needed: a use of 4 different window functions, each in atleast 2 different queries, preferably 2 queries both with all 4 functions.
+    the queries must not be possible perform without window functions.
+
+    currently used functions:
+        Function Name   |   Query1 used in   |   Query2 used in
+    - 
+    - 
+    - 
+    - 
+*/
 
 /* 
     Present TOP 3 seeds (with climate details: sun amount and season) that were sold within each State and City.
@@ -159,7 +256,7 @@ FROM
 
 WHERE       quantity_rank <= 3
 
-ORDER BY    State, City, total_ordered_quantity DESC
+ORDER BY    State, total_ordered_quantity DESC
 
 /* 
     Per User: Calculate Avg. Days gap between orders and amount of days since last order.
@@ -173,8 +270,7 @@ SELECT  Email, OrderID, OrderDate,
         Total_Avg_orders_time_gap = AVG(Difference_in_Days) OVER (),
         Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email), 
         Days_from_Last_User_Order,
-        Estimated_Days_to_Next_Order = AVG(Difference_in_Days) OVER (PARTITION BY Email) - Days_from_Last_User_Order
-    
+        Estimated_Days_to_Next_Order = AVG(Difference_in_Days) OVER (PARTITION BY Email) - Days_from_Last_User_Order    
 FROM
     (
         SELECT Ord.Email, Ord.OrderID, Ord.OrderDate, LEAD(Ord.OrderDate) Over(Partition BY Email ORDER BY Email) AS Next_Order_Date,
@@ -182,15 +278,22 @@ FROM
             Last_User_Order_Date = LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email),
             Days_from_Last_User_Order = DATEDIFF(day, LAST_VALUE(OrderDate) OVER (PARTITION BY Email ORDER BY Email), GETDATE())
         FROM dbo.ORDERS AS ord
-
         WHERE ord.Email IS NOT NULL
-
     ) AS next_ords
-;
-
-
 
 /* PART 5 - WITH QUERY */
+
+/*
+    Income comparison report of items or types of items
+    Motivation: Detect which items are the most profitable and which are the least, and adjust marketing and production accordingly.
+    include in the report: 
+        - income payment per item whether it is sold as included within a premade garden, a self design garden or as simple product on its own. (which is around 4 and 6 columns of information about them)
+        - popularity trends and how they affect the income. (need to think how to calculate this, maybe using the connection between the items within the same order or something.)
+
+needs more planning, after planning should start implementing, and reasoning why cannot be made simply without using with clause.
+
+*/
+
 
 /* 
     IDEAS
@@ -199,14 +302,15 @@ FROM
             * Search to Order time per weekday and month of the year.
             * Popular Seed Category.
             * Which seed category is search for per state and city? and compare it to orders of that category in State and City.
-                Motivation: Seed preferences according to geographical area and how does the search engine helps to get more orders.\
+                Motivation: Seed preferences according to geographical area and how does the search engine helps to get more orders.
     THE FOLLOWING CODE IS FOR THE LAST IDEA
 */
 
-WITH geo_for_search (State, City) AS (
+WITH 
+geo_for_search AS (
     SELECT      DISTINCT
-                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
-                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City
+                [State] = CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)),
+                City = CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128))
     FROM        dbo.DETAILS
 ),
 geo_for_order () AS (
