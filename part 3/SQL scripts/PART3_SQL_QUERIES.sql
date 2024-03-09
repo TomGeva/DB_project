@@ -28,7 +28,6 @@ FROM dbo.PRODUCTS
 
 /* 
     for every seed, what is the quantity that was ordered as a part of a designed garden, in the last month and in the same month a year before
-    NOTE TO SELF: IS GOOD. NEED TO ADD MORE DATA THAT'S RELEVANT FOR THIS QUERY.
 */
 SELECT      [Seed Name] = C.Seed, 
             [Seed Quantitity Of Last Month] = SUM(CASE WHEN DATEDIFF(MONTH, O.OrderDate, GETDATE()) = 1 THEN C.Quantity*DSG.Quantity ELSE 0 END),
@@ -273,6 +272,7 @@ ORDER BY Estimated_Days_to_Next_Order DESC
 /* PART 5 - WITH QUERY */
 
 /*
+    Income comparison of seeds
     Income comparison report of items or types of items
     Motivation: Detect which items are the most profitable and which are the least, and adjust marketing and production accordingly.
     include in the report: 
@@ -281,7 +281,55 @@ ORDER BY Estimated_Days_to_Next_Order DESC
 
 needs more planning, after planning should start implementing, and reasoning why cannot be made simply without using with clause.
 
+profitability by garden type (amount of small and large)
+which garden type is the most appealing to customers by the use of different seed type.
+
+can we see a trend by the seed_type
+
+can we see a trend by the season of the seed
+
+are bigger seeds more profitable than smaller seeds? or vice versa?
+
+
+
+
+report:
+per seed - for this month
+    - seed name
+    - income for single unit as product
+    - avg income for a single unit of the seed from actual premade garden sales
+    - avg income for a single unit of the seed from actual personal design garden sales
+    - avg income for a single unit of the seed overall
+    - quantity sold of the seed as a part of premade gardens
+    - quantity sold of the seed as a part of personal design gardens
+    - quantity sold of the seed as a simple product
+    - quantity sold of the seed overall
+    - precentage of increase of income from base price of single seed sell compared to as a part of a garden
+
 */
+WITH
+income_per_seed_from_designs_per_order AS (
+    SELECT      Seed = C.Seed,
+                OrderID = DSG.OrderID, 
+                DesignID = DSG.DesignID,
+                SeedTotalIncome = (PRD.Price - PRD.Discount) * DSG.Quantity * C.Quantity / CASE WHEN DSG.Name = 'Huge Harvest' THEN 4 
+                                                                                                WHEN DSG.Name = 'Mixed Medley' THEN 6
+                                                                                                ELSE 8 END,
+                GardenQuantity = DSG.Quantity,    
+                SeedSingleIncome = (PRD.Price - PRD.Discount) * C.Quantity / CASE   WHEN DSG.Name = 'Huge Harvest' THEN 4 
+                                                                                    WHEN DSG.Name = 'Mixed Medley' THEN 6
+                                                                                    ELSE 8 END,
+                ChooseQuantity = C.Quantity
+                TotalAmountOfSeedsInGarden = 
+    FROM        DESIGNS AS DSG
+                JOIN dbo.CHOSENS AS C
+                    ON DSG.DesignID = C.Design AND DSG.Name = C.Garden
+                JOIN dbo.GARDENS AS G
+                    ON DSG.Name = G.Name
+                JOIN dbo.PRODUCTS AS PRD
+                    ON G.Name = PRD.Name
+)
+
 
 
 /* 
@@ -343,7 +391,7 @@ FROM        dbo.RESULTS AS rs
 WHERE       DATEDIFF(N, rs.SearchDT, ord.OrderDate) < 5
 GROUP BY    DATENAME(WEEKDAY, ord.OrderDate)
 ORDER BY    2 DESC
-;
+
 
 
 /* 
@@ -361,5 +409,5 @@ FROM        dbo.INCLUSIONS AS inc
                 ON inc.OrderID = ord.OrderID
 GROUP BY    CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(ord.Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128))
 ORDER BY    2 DESC
-;
+
 
