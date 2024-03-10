@@ -44,7 +44,7 @@ ORDER BY    [Seed Quantitity Of Last Month] DESC, [Seed Quantitity Of Year Befor
 
 /*
     How many purcheses were made with each personalized garden type from the past year?
-    Motivation: To estimarte how many gardens to build this year from each type.
+    Motivation: To estimate how many gardens to build this year from each type.
 */
 
 SELECT D.Name,
@@ -82,8 +82,9 @@ ORDER BY    Appearances DESC
     Motivation: Post advertisments and discounts on the website on those months.
 */
 
-SELECT      [Average Orders] = AVG(Orders),
-            [Month]
+SELECT      [Month],
+            [Average Orders] = AVG(Orders)
+            
 FROM        (
             SELECT      Orders = COUNT(*),
                         [Year] = YEAR(O.OrderDate),
@@ -143,7 +144,7 @@ SELECT      [Seed_Name] = Seed,
             [Total Quantity] = SUM(Quantity),
             [Total Orders] = COUNT(OrderID),
             [Avg Quantity per Order] = ROUND(AVG(CAST(Quantity AS FLOAT)),2)
-FROM    (
+FROM    (   /* seeds bought within a custom garden */
             SELECT      Seed = C.Seed,
                         OrderID = O.OrderID,
                         OrderDate = O.OrderDate,
@@ -158,7 +159,7 @@ FROM    (
                             ON C.Seed = SD.Name
                         JOIN dbo.SEED_TYPES AS ST
                             ON SD.Name = ST.Name
-        UNION 
+        UNION /* seeds bought stand-alone */
             SELECT      Seed = I.Name,
                         OrderID = O.OrderID,
                         OrderDate = O.OrderDate,
@@ -171,7 +172,7 @@ FROM    (
                             ON I.Name = SD.Name
                         JOIN dbo.SEED_TYPES AS ST
                             ON SD.Name = ST.Name
-        UNION 
+        UNION  /* seeds bought within a already-garden */
             SELECT      Seed = PLT.Seed,
                         OrderID = O.OrderID,
                         OrderDate = O.OrderDate,
@@ -202,44 +203,53 @@ ORDER BY    YEAR(OrderDate), DATEPART(QUARTER, OrderDate), [Total Quantity] DESC
     the queries must not be possible perform without window functions.
 
     currently used functions:
-        Function Name   |   Query1 used in   |   Query2 used in
-    - 
-    - 
-    - 
-    - 
+        Function Name   |  Query Used in
+    -   ROW_NUMBER              1
+    -   CUME_DIST               1
+    -   LEAD                    2
+    -   LAST_VALUE              2
+    -   Aggregation             2
 */
 
-/* 
-    Present TOP 3 seeds (with climate details: sun amount and season) that were sold within each State and City.
-    Motivation: Adjust seed and garden marketing per geography in style of discounts, advertisments and more.
 
-    NOTE: MIGHT NEED SOME CHANGES IN THE TABLES BECAUSE OF THE ADDITION OF "DESIGN" WEAK ENTITY.
 
+/*
+    Query 1
+    Per State: Rank the cities by total sales - for management / marketing.
+                Also, show the cumulative distribution of each city order-wise for:
+                marketing focus or supply-chain management - drivers and trucks allocation
 */
-
-SELECT * 
+SELECT      ordcities.State, ordcities.City, ordcities.Orders_per_City,
+            city_rank_by_orders = ROW_NUMBER() over (Partition BY ordcities.State Order BY ordcities.Sales_per_City DESC),
+            cume_dist = CUME_DIST() OVER (PARTITION BY State ORDER BY Orders_per_City)
 FROM
 (
-    SELECT      ordState.State, 
-                inc.Name, sd.Season, sd.Sun_amount, total_ordered_quantity = SUM(inc.Quantity),
-                ROW_NUMBER() over (Partition BY ordState.State Order BY SUM(inc.Quantity) DESC) AS quantity_rank
-    FROM        (
-                    SELECT      OrderID, 
-                                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State
-                    FROM        dbo.ORDERS
-                ) AS ordState
-                INNER JOIN  dbo.INCLUSIONS AS inc
-                    ON inc.OrderID = ordState.OrderID
-                INNER JOIN dbo.SEEDS AS sd
-                    ON sd.Name = inc.Name
-    GROUP BY    ordState.State, inc.Name, sd.Season, sd.Sun_amount
-) AS ordered_quants
+            /* Calculate Sales per City */
+            SELECT  State, City, Orders_per_City = COUNT(OrderID), Sales_per_City = SUM(order_price)
+            FROM 
+                    (   /* extract geography (State, City) for each order and calculate order price */
+                        SELECT   OrderID, State, City, order_price = SUM(product_price)
+                        FROM
+                                (
+                                    SELECT ord.OrderID, 
+                                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
+                                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                                    FROM        dbo.ORDERS AS ord
+                                    INNER JOIN dbo.INCLUSIONS AS inc
+                                        ON ord.OrderID = inc.OrderID
+                                    INNER JOIN dbo.PRODUCTS AS prd
+                                        ON inc.Name = prd.Name
+                                    ) AS ords
+                        GROUP BY    OrderID, State, City
+                    ) AS ordState
+            GROUP BY State, City
+) AS ordcities
+ORDER BY    State, city_rank_by_orders
 
-WHERE       quantity_rank <= 3
-
-ORDER BY    State, total_ordered_quantity DESC
 
 /* 
+    Query 2
     Per User: Calculate Avg. Days gap between orders and amount of days since last order.
                 With this information, estimate the time to the next order a user will make.
     Also calculate total Avg. Days gap between orders.
@@ -248,7 +258,7 @@ ORDER BY    State, total_ordered_quantity DESC
 SELECT *
 FROM 
     (
-    SELECT  DISTINCT Email, Order_Date = MAX(OrderDate) OVER (PARTITION BY Email),
+    SELECT  DISTINCT Email, Last_Order_Date = MAX(OrderDate) OVER (PARTITION BY Email),
             Orders_Per_User = COUNT(OrderID) OVER (PARTITION BY Email),
             Total_Avg_orders_time_gap = AVG(Difference_in_Days) OVER (),
             Avg_User_Orders_time_gap = AVG(Difference_in_Days) OVER (PARTITION BY Email), 
@@ -264,8 +274,8 @@ FROM
             WHERE ord.Email IS NOT NULL 
         ) AS next_ords
     ) AS C
-WHERE Estimated_Days_to_Next_Order > 0
-ORDER BY Estimated_Days_to_Next_Order DESC
+WHERE       Estimated_Days_to_Next_Order > 0
+ORDER BY    Estimated_Days_to_Next_Order DESC
 
 
 
@@ -371,6 +381,37 @@ FROM searched_seed_cat
 
 
  /* TYUUUUUUUUTAAAAA ***DRAFT*** */
+
+/* 
+    Present TOP 3 seeds from premade gardens (with climate details: sun amount and season) that were sold within each State and City.
+    Motivation: Adjust seed and garden marketing per geography in style of discounts, advertisments and more.
+
+*/
+
+SELECT *
+FROM
+(
+    SELECT      ordState.State, 
+                inc.Name, sd.Season, sd.Sun_amount, total_ordered_quantity = SUM(inc.Quantity),
+                ROW_NUMBER() over (Partition BY ordState.State Order BY SUM(inc.Quantity) DESC) AS quantity_rank
+                
+               
+    FROM        (   /* extract geography (State) for each order */
+                    SELECT      OrderID, 
+                                CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State
+                    FROM        dbo.ORDERS
+                ) AS ordState
+                INNER JOIN  dbo.INCLUSIONS AS inc
+                    ON inc.OrderID = ordState.OrderID
+                INNER JOIN dbo.SEEDS AS sd
+                    ON sd.Name = inc.Name
+    GROUP BY    ordState.State, inc.Name, sd.Season, sd.Sun_amount
+) AS ordered_quants
+WHERE       quantity_rank <= 3
+ORDER BY    State, total_ordered_quantity DESC
+
+
+
 /* Amount of searches that led to an order within 5 minutes.
     The goal of this query is to check how good the search engine 
     of the website works.
