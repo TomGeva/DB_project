@@ -205,7 +205,7 @@ ALTER TABLE dbo.SEEDS
 		CONSTRAINT	Ck_Season
 			CHECK	(Season IN ('Summer', 'Spring', 'Winter', 'Fall')),
         CONSTRAINT  Ck_Sun_amount
-            CHECK   (Sun_amount IN ('Partila Shade', 'Partial Shade / Shade', 
+            CHECK   (Sun_amount IN ('Partial Shade', 'Partial Shade / Shade', 
                                     'Full Sun / Partial Shade', 'Prefers Shade', 
                                     'Shade', 'Prefers Partial Shade', 
                                     'Full Sun', 'Prefers Full Sun'))
@@ -287,6 +287,37 @@ ALTER TABLE dbo.ORDERS
 										REFERENCES	dbo.PYMNTTYPELOOKUP	(Type),
         CONSTRAINT  Fk_Shpmmethd    FOREIGN KEY (Shipping_method)
                                         REFERENCES  dbo.SHIPNGMTHDLOOKUP    (Method)
+
+BULK INSERT dbo.PRODUCTS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\PRODUCTS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.RELATIONS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\RELATIONS.csv' WITH ( FORMAT = 'CSV')
+BULK INSERT dbo.RELATIONS_ FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\RELATIONS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.USERS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\USERS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.SEARCHES FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\SEARCHES.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.RESULTS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\RESULTS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.SEEDS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\SEEDS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.SEED_TYPES FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\SEED_TYPES.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.GARDENS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\GARDENS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.PLANTEDS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\PLANTEDS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.DETAILS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\DETAILS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.DETAILS_OF FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\DETAILS_OF.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.ORDERS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\ORDERS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.DESIGNS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\DESIGNS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.CHOSENS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\CHOSENS.csv' WITH ( FORMAT = 'CSV')
+
+BULK INSERT dbo.INCLUSIONS FROM 'D:\\code files\\GitHub\\university\\DB_project\\part 3\\csv files\\INCLUSIONS.csv' WITH ( FORMAT = 'CSV')
 
 
 -- || DROPING OF TABLES SECTION ||
