@@ -272,55 +272,16 @@ ORDER BY Estimated_Days_to_Next_Order DESC
 /* PART 5 - WITH QUERY */
 
 /*
-    Income comparison of seeds
-    Income comparison report of items or types of items
-    Motivation: Detect which items are the most profitable and which are the least, and adjust marketing and production accordingly.
-    include in the report: 
-        - income payment per item whether it is sold as included within a premade garden, a self design garden or as simple product on its own. (which is around 4 and 6 columns of information about them)
-        - popularity trends and how they affect the income. (need to think how to calculate this, maybe using the connection between the items within the same order or something.)
-
-needs more planning, after planning should start implementing, and reasoning why cannot be made simply without using with clause.
-
-profitability by garden type (amount of small and large)
-which garden type is the most appealing to customers by the use of different seed type.
-
-can we see a trend by the seed_type
-
-can we see a trend by the season of the seed
-
-are bigger seeds more profitable than smaller seeds? or vice versa?
-
-
-
-
-report:
-per seed - for this month
-    - seed name
-    - income for single unit as product
-    - avg income for a single unit of the seed from actual premade garden sales
-    - avg income for a single unit of the seed from actual personal design garden sales
-    - avg income for a single unit of the seed overall
-    - quantity sold of the seed as a part of premade gardens
-    - quantity sold of the seed as a part of personal design gardens
-    - quantity sold of the seed as a simple product
-    - quantity sold of the seed overall
-    - precentage of increase of income from base price of single seed sell compared to as a part of a garden
-
+    Report of seed profitability in the Last quarter, in comparison to the base price of the seed, overall the sales and seperated over designed gardens and premade gardens.
 */
 WITH
 income_per_seed_from_designs_per_order AS (
+    /*
+        find the income and quantity of each seed for each garden design sold in the last quarter
+    */
     SELECT      Seed = C.Seed,
-                OrderID = DSG.OrderID, 
-                DesignID = DSG.DesignID,
-                SeedTotalIncome = (PRD.Price - PRD.Discount) * DSG.Quantity * C.Quantity / CASE WHEN DSG.Name = 'Huge Harvest' THEN 4 
-                                                                                                WHEN DSG.Name = 'Mixed Medley' THEN 6
-                                                                                                ELSE 8 END,
-                GardenQuantity = DSG.Quantity,    
-                SeedSingleIncome = (PRD.Price - PRD.Discount) * C.Quantity / CASE   WHEN DSG.Name = 'Huge Harvest' THEN 4 
-                                                                                    WHEN DSG.Name = 'Mixed Medley' THEN 6
-                                                                                    ELSE 8 END,
-                ChooseQuantity = C.Quantity
-                TotalAmountOfSeedsInGarden = 
+                TotalIncome = (PRD.Price - PRD.Discount) * DSG.Quantity * C.Quantity / SUM(C.Quantity) OVER (PARTITION BY DSG.Name, DSG.DesignID),
+                QuantitySold = C.Quantity*DSG.Quantity
     FROM        DESIGNS AS DSG
                 JOIN dbo.CHOSENS AS C
                     ON DSG.DesignID = C.Design AND DSG.Name = C.Garden
@@ -328,86 +289,115 @@ income_per_seed_from_designs_per_order AS (
                     ON DSG.Name = G.Name
                 JOIN dbo.PRODUCTS AS PRD
                     ON G.Name = PRD.Name
+                JOIN dbo.ORDERS AS O
+                    ON DSG.OrderID = O.OrderID
+    WHERE       DATEDIFF(QUARTER, O.OrderDate, GETDATE()) = 1
+),
+income_per_seed_from_premade_per_order AS (
+    /*
+        find the income and quantity of each seed for each premade garden sold in the last quarter
+    */
+    SELECT      Seed = PLT.Seed,
+                TotalIncome = (PRD.Price - PRD.Discount) * I.Quantity * PLT.Quantity / SUM(PLT.Quantity) OVER (PARTITION BY O.OrderID, I.Name),
+                QuantitySold = PLT.Quantity*I.Quantity
+    FROM        dbo.INCLUSIONS AS I
+                JOIN dbo.PRODUCTS AS PRD
+                    ON I.Name = PRD.Name
+                JOIN dbo.GARDENS AS G
+                    ON I.Name = G.Name
+                JOIN dbo.PLANTEDS AS PLT
+                    ON G.Name = PLT.Garden
+                JOIN dbo.ORDERS AS O
+                    ON I.OrderID = O.OrderID
+    WHERE       DATEDIFF(QUARTER, O.OrderDate, GETDATE()) = 1
+),
+income_per_seed_as_simple_product AS (
+    /*
+        find the income and quantity of each seed for each sell of seeds in the last quarter
+    */
+    SELECT      Seed = I.Name,
+                TotalIncome = (PRD.Price - PRD.Discount) * I.Quantity,
+                QuantitySold = I.Quantity
+    FROM        dbo.INCLUSIONS AS I
+                JOIN dbo.PRODUCTS AS PRD
+                    ON I.Name = PRD.Name
+                JOIN dbo.ORDERS AS O
+                    ON I.OrderID = O.OrderID
+    WHERE       I.Name IN (SELECT Name FROM dbo.SEEDS) AND DATEDIFF(QUARTER, O.OrderDate, GETDATE()) = 1
+),
+OverallStat AS (
+    /*
+        calculate income statistics for each seed over all kinds of sales in the last quarter
+    */
+    SELECT      Seed = SeedIncome.Seed,
+                TotalIncome = SUM(SeedIncome.TotalIncome),
+                QuantitySold = SUM(SeedIncome.QuantitySold),
+                AvgPriceUnit = SUM(SeedIncome.TotalIncome)/SUM(SeedIncome.QuantitySold),
+                BasePrice = PRD.Price - PRD.Discount
+    FROM
+                (
+                    SELECT      Seed,
+                                TotalIncome,
+                                QuantitySold
+                    FROM        income_per_seed_from_designs_per_order
+                    UNION
+                    SELECT      Seed,
+                                TotalIncome,
+                                QuantitySold
+                    FROM        income_per_seed_from_premade_per_order
+                    UNION
+                    SELECT      Seed,
+                                TotalIncome,
+                                QuantitySold
+                    FROM        income_per_seed_as_simple_product
+                ) AS SeedIncome
+                JOIN    dbo.PRODUCTS AS PRD
+                            ON SeedIncome.Seed = PRD.Name
+    GROUP BY    Seed, PRD.Price - PRD.Discount
+),
+DesignStat AS (
+    /*
+        calculate income statistics for each seed over seeds sold as a part of a part of a designed garden in the last quarter
+    */
+    SELECT      Seed = design.Seed, 
+                TotalIncome = SUM(design.TotalIncome),
+                QuantitySold = SUM(design.QuantitySold),
+                AvgPriceUnit = SUM(design.TotalIncome)/SUM(design.QuantitySold),
+                BasePrice = PRD.Price - PRD.Discount
+    FROM        income_per_seed_from_designs_per_order AS design
+                JOIN dbo.PRODUCTS AS PRD
+                    ON design.Seed = PRD.Name
+    GROUP BY    Seed, PRD.Price - PRD.Discount
+),
+PremadeStat AS (
+    /*
+        calculate income statistics for each seed over seeds sold as a part of a part of a premade garden in the last quarter
+    */
+    SELECT      Seed = premade.Seed, 
+                TotalIncome = SUM(premade.TotalIncome),
+                QuantitySold = SUM(premade.QuantitySold),
+                AvgPriceUnit = SUM(premade.TotalIncome)/SUM(premade.QuantitySold),
+                BasePrice = PRD.Price - PRD.Discount
+    FROM        income_per_seed_from_premade_per_order AS premade
+                JOIN dbo.PRODUCTS AS PRD
+                    ON premade.Seed = PRD.Name
+    GROUP BY    Seed, PRD.Price - PRD.Discount
 )
-
-
-
-/* 
-    IDEAS
-    Inspect Shopping trends by: 
-            * Orders and OrdersPrice per weekday and month of the year.
-            * Search to Order time per weekday and month of the year.
-            * Popular Seed Category.
-            * Which seed category is search for per state and city? and compare it to orders of that category in State and City.
-                Motivation: Seed preferences according to geographical area and how does the search engine helps to get more orders.
-    THE FOLLOWING CODE IS FOR THE LAST IDEA
+/*
+    present report of seed profitability in the last quarter in an appropriate format
 */
-
-WITH 
-geo_for_search AS (
-    SELECT      DISTINCT
-                [State] = CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)),
-                City = CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128))
-    FROM        dbo.DETAILS
-),
-geo_for_order () AS (
-
-),
- searched_seed_cat ([Type], cat_search_count) AS (
-    SELECT      st.[Type], COUNT(CONCAT(res.IP_address, res.SearchDT)) AS cat_search_count
-    FROM        dbo.RESULTS AS res
-    INNER JOIN  dbo.SEED_TYPES AS st
-        ON res.Name = st.Name
-    GROUP BY    st.[Type]
-),
-ordered_seed_cat () AS (
-
-)
-SELECT *
-FROM searched_seed_cat
-;
-
-
-
-
- /* TYUUUUUUUUTAAAAA ***DRAFT*** */
-/* Amount of searches that led to an order within 5 minutes.
-    The goal of this query is to check how good the search engine 
-    of the website works.
-    NOTE TO SELF: 
-                we need to show a comparison with how many orders
-                DIDNT lead to an order within this time range. (maybe with CASE).
-                Another option - Calculate the Avg./Median/SD of diff minutes
-                between search and order. but this are nested...
-*/
-
-SELECT      DATENAME(WEEKDAY, ord.OrderDate) AS order_week_day,
-            COUNT(CONCAT(rs.IP_address, rs.SearchDT)) AS searches_lead_to_orders
-FROM        dbo.RESULTS AS rs
-            INNER JOIN INCLUSIONS AS inc
-                ON rs.Name = inc.Name
-            INNER JOIN ORDERS AS ord
-                ON inc.OrderID = ord.OrderID
-WHERE       DATEDIFF(N, rs.SearchDT, ord.OrderDate) < 5
-GROUP BY    DATENAME(WEEKDAY, ord.OrderDate)
-ORDER BY    2 DESC
-
-
-
-/* 
-    Segmentate orders that included Gardens, By geography.
-    Order by count in descending order.
-    # extract city from text (the value after the 3rd ,): COALESCE(LTRIM(CAST(('<X>'+REPLACE(ord.Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '')
-*/
-SELECT      
-            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(ord.Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS city,
-            COUNT(inc.OrderID) AS count_garden_orders
-FROM        dbo.INCLUSIONS AS inc
-            INNER JOIN dbo.GARDENS AS grd
-                ON inc.Name = grd.Name
-            INNER JOIN dbo.ORDERS AS ord
-                ON inc.OrderID = ord.OrderID
-GROUP BY    CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(ord.Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128))
-ORDER BY    2 DESC
-
-
+SELECT      Seed = OST.Seed,
+            [Total Income] = OST.TotalIncome,
+            [Quantity Sold] = OST.QuantitySold,
+            [Avg Price per Unit] = OST.AvgPriceUnit,
+            [Profit %] = CONCAT(CAST((OST.AvgPriceUnit - OST.BasePrice) / OST.BasePrice * 100 AS varchar(7)), '%'),
+            [Designed - Avg Price per Unit] = CASE WHEN DST.QuantitySold IS NULL THEN OST.BasePrice ELSE DST.AvgPriceUnit END,
+            [Designed - Profit %] = CONCAT(CAST((DST.AvgPriceUnit - DST.BasePrice) / DST.BasePrice * 100 AS varchar(7)), '%'),
+            [Premade - Avg Price per Unit] = PST.AvgPriceUnit,
+            [Premade - Profit %] = CONCAT(CAST((PST.AvgPriceUnit - PST.BasePrice) / PST.BasePrice * 100 AS VARCHAR(7)), '%')
+FROM        OverallStat AS OST
+            LEFT JOIN DesignStat AS DST
+                ON OST.Seed = DST.Seed
+            LEFT JOIN PremadeStat AS PST
+                ON OST.Seed = PST.Seed
+ORDER BY    OST.AvgPriceUnit DESC
