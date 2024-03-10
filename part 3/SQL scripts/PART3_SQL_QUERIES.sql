@@ -579,6 +579,7 @@ WITH total_sales_last_year AS (
                     ON dsg.OrderID = ord.OrderID
                 INNER JOIN dbo.PRODUCTS AS prd
                     ON g.Name = prd.Name
+                WHERE DATEDIFF(DAY, ord.OrderDate, GETDATE()) <= 365 /*choose last year*/
         ) AS ords
 ),
 /* Calculate the last sales trend (sales are up or down)? */
@@ -597,7 +598,7 @@ last_sales_trend AS (
             [Months From Today],
             [Sales] = SUM(product_price)
     FROM
-        (
+        (   /* calculate total sales last year by month */
                 SELECT  ord.OrderID, 
                         [Month] = DATENAME(MONTH, ord.OrderDate),
                         [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
@@ -622,6 +623,7 @@ last_sales_trend AS (
                     ON dsg.OrderID = ord.OrderID
                 INNER JOIN dbo.PRODUCTS AS prd
                     ON g.Name = prd.Name
+                WHERE DATEDIFF(DAY, ord.OrderDate, GETDATE()) <= 365 /*choose last year*/
         ) AS ords
     GROUP BY  ords.[Months from Today], ords.[Month]
 
@@ -632,11 +634,12 @@ SELECT sls.total_sales,
         trd.Trend
 FROM total_sales_last_year AS sls,
      last_sales_trend AS trd
-
+;
 
 
 /*
-    Query 2 - for KPI: Ratio Sales ($) from Gardens sold, out of the general sales
+    Query 2 - for KPI: Ratio Sales ($) from Gardens sold, out of the general sales,
+                        for all times.
 */
 ;
 WITH sales_from_premade_gardens AS (
@@ -699,68 +702,160 @@ total_sales AS (
 SELECT  [Gardens Sales Ratio] = ((pre.Premae_Garden_Sales + cus.Custom_Garden_Sales)/tot.total_sales)*100
 FROM    sales_from_premade_gardens AS pre,
         sales_from_custom_gardens AS cus,
-        total_sales AS tot
-    
+        total_sales AS tot   
+;
+
+
+/*
+    Query 3 - KPI 3 & 4: # of states with positive/negative change in sales since last year 
+                        and show the avg.change in $.
+    NOTE: for the demonstration, the comparison will be between 2022 and 2023.
+*/
+
+WITH
+/* calculate total sales by this and last year */
+sales_per_year_state AS (
+    SELECT  [State],
+            [Year],
+            [Sales] = SUM(product_price)
+        FROM
+        (
+                SELECT  ord.OrderID, 
+                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
+                        [Year] = DATEPART(Year, ord.OrderDate),
+                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                FROM        dbo.ORDERS AS ord
+                INNER JOIN dbo.INCLUSIONS AS inc
+                    ON ord.OrderID = inc.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON inc.Name = prd.Name
+                WHERE DATEPART(Year, ord.OrderDate) IN (2022, 2023)
+
+                UNION
+                /* add sales of custom designed gardens */
+                SELECT      ord.OrderID,
+                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
+                            [Year] = DATEPART(Year, ord.OrderDate),
+                            product_price = (prd.Price - prd.Discount)* dsg.Quantity
+                FROM        dbo.DESIGNS AS dsg
+                INNER JOIN  dbo.GARDENS AS g
+                    ON dsg.Name = g.Name
+                INNER JOIN dbo.ORDERS AS ord
+                    ON dsg.OrderID = ord.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON g.Name = prd.Name
+                WHERE DATEPART(Year, ord.OrderDate) IN (2022, 2023)
+
+        ) AS ords
+        GROUP BY [State], [Year]
+),
+/* add last year's sales to the same row */
+last_year_sales AS (
+    SELECT [State], 
+            Sales,
+            [Last Year Sales] = LAG(Sales) OVER(PARTITION BY [State] ORDER BY [Year])
+    FROM sales_per_year_state
+),
+/* compute sales delta */
+sales_delta AS (
+    SELECT  *,
+            [Sales Delta] = Sales - [Last Year Sales],
+            Trend = CASE WHEN Sales - [Last Year Sales] > 0 THEN '+' ELSE '-' END
+    FROM last_year_sales
+    WHERE [Last Year Sales] IS NOT NULL /* remove rows with no previous year */
+)
+/* Count Positive Delta and Negative Delta and Avg.Change in Sales */
+SELECT  Trend, 
+        [Number of States] = COUNT([State]), 
+        [Avg. Sales Delta] = AVG([sales delta])
+FROM sales_delta
+GROUP BY Trend
+;
 
 
 
 /* 
-    Trend Query #1 - Per State and City: show the cumulative distribution of each city for
-                marketing focus.
-    NOTE: FOR DRILL DOWN HIRERCHY PURPOSES, NEEDED TO ADD COLUMN cume_dist_State, SO
-            THE INITIAL HEAT MAP WILL START FROM THE STATES AND NOT THE CITITES.
+    Trend Query #1 - Per State and City: show the cumulative distribution of each city and state for
+                marketing focus. The divition for State and City seperately is for drill down.
+    NOTE: It takes relatively long time to run, around ~1 min.
 
 */
 
-SELECT      ordcities.State, 
-            ordcities.City, 
-            ordcities.Orders_per_City,
-            city_rank_by_orders = ROW_NUMBER() over (Partition BY ordcities.State Order BY ordcities.Sales_per_City DESC),
-            cume_dist_City = CUME_DIST() OVER (PARTITION BY State ORDER BY Orders_per_City)
-FROM
-(
-            /* Calculate Sales per City */
-            SELECT  State, 
-                    City, 
-                    Orders_per_City = COUNT(OrderID),
-                    Sales_per_City = SUM(order_price)
-            FROM 
-                    (   /* extract geography (State, City) for each order and calculate order price */
-                        SELECT   OrderID, State, City, order_price = SUM(product_price)
-                        FROM
-                                (
-                                    SELECT ord.OrderID, 
-                                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
-                                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
-                                        product_price = inc.Quantity * (prd.Price - prd.Discount)
-                                    FROM        dbo.ORDERS AS ord
-                                    INNER JOIN dbo.INCLUSIONS AS inc
-                                        ON ord.OrderID = inc.OrderID
-                                    INNER JOIN dbo.PRODUCTS AS prd
-                                        ON inc.Name = prd.Name
-                                    ) AS ords
-                        GROUP BY    OrderID, State, City
-                    ) AS ordState
-            GROUP BY State, City
-) AS ordcities
-ORDER BY    State, city_rank_by_orders
+WITH
+/* extract geography for each order */
+orders_geo AS (
+    SELECT  ord.OrderID,
+            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City
+    FROM    dbo.ORDERS AS ord
+),
+/* calculate cumulative distribution of order numbers per state and city */
+cume_dist_city AS (
+    SELECT  [State], 
+            City,   
+            orders_per_city,
+            cume_dist_City = ROUND(CUME_DIST() OVER (PARTITION BY State ORDER BY orders_per_city),3)
+    FROM    (
+                SELECT  [State], 
+                        City,   
+                        orders_per_city = COUNT(OrderID)
+                FROM orders_geo
+                GROUP BY State, City
+            ) AS ords
+),
+/* calculate cumulative distribution of order numbers per state */
+cume_dist_state AS (
+    SELECT  [State],
+            orders_per_state,
+            cume_dist_state = ROUND(CUME_DIST() OVER (ORDER BY orders_per_state),3)
+    FROM    (
+                SELECT  [State],    
+                        orders_per_state = COUNT(OrderID)
+                FROM orders_geo
+                GROUP BY [State]
+            ) AS ords
+)
+/* Present all the data together */
+SELECT  geo.State, 
+        st.orders_per_state,
+        st.cume_dist_state,
+        geo.City,
+        ct.orders_per_city,
+        ct.cume_dist_City
+FROM    ( /* create a unique list of State and City */
+            SELECT  DISTINCT 
+                    [State],
+                    City
+            FROM orders_geo 
+        ) AS geo
+INNER JOIN cume_dist_state AS st
+    ON geo.State = st.State
+INNER JOIN cume_dist_city AS ct
+    ON (geo.State = ct.State AND geo.City = ct.City) 
+;
+
+
+
 
 
 /*
-    Trend Query #2 - sales by month. need to add state
+    Trend Query #2 - Sales by month and geography last year.
+                     Also allows drill down here (whether in geography, whether in month)
 */
-SELECT
-            [Month],
-            [Months From Today],
-            sls.Sales
-    FROM
-    (
-    SELECT  ords.[Month],
+
+
+    SELECT  [State],
+            City,
+            ords.[Month],
             [Months From Today],
             [Sales] = SUM(product_price)
     FROM
-        (
+        (       /* calculate total sales last year */
                 SELECT  ord.OrderID, 
+                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
                         [Month] = DATENAME(MONTH, ord.OrderDate),
                         [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
                         product_price = inc.Quantity * (prd.Price - prd.Discount)
@@ -774,6 +869,8 @@ SELECT
                 UNION
                 /* add sales of custom designed gardens */
                 SELECT      ord.OrderID,
+                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                            CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
                             [Month] = DATENAME(MONTH, ord.OrderDate),
                             [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
                             product_price = (prd.Price - prd.Discount)* dsg.Quantity
@@ -784,9 +881,9 @@ SELECT
                     ON dsg.OrderID = ord.OrderID
                 INNER JOIN dbo.PRODUCTS AS prd
                     ON g.Name = prd.Name
+                WHERE DATEDIFF(DAY, ord.OrderDate, GETDATE()) <= 365 /*choose last year*/
 
         ) AS ords
-    GROUP BY  ords.[Months from Today], ords.[Month]
-
-    ) AS sls
-    ORDER BY [Months From Today]
+    GROUP BY  [State], City, ords.[Months from Today], ords.[Month]
+    ORDER BY [State], [Months From Today]
+    
