@@ -387,3 +387,407 @@ FROM        OverallStat AS OST
             LEFT JOIN PremadeStat AS PST
                 ON OST.Seed = PST.Seed
 ORDER BY    OST.AvgPriceUnit DESC
+
+
+
+
+
+/* ----------------- QUERIES FOR POWERBI ----------------- */
+
+/*
+    For the Business Report:
+    The WITH query from PART 5 but with SEED INFO added
+*/
+WITH
+income_per_seed_from_designs_per_order AS (
+    /*
+        find the income and quantity of each seed for each garden design sold in the last quarter
+    */
+    SELECT      Seed = C.Seed,
+                TotalIncome = (PRD.Price - PRD.Discount) * DSG.Quantity * C.Quantity / SUM(C.Quantity) OVER (PARTITION BY DSG.Name, DSG.DesignID),
+                QuantitySold = C.Quantity*DSG.Quantity
+    FROM        DESIGNS AS DSG
+                JOIN dbo.CHOSENS AS C
+                    ON DSG.DesignID = C.Design AND DSG.Name = C.Garden
+                JOIN dbo.GARDENS AS G
+                    ON DSG.Name = G.Name
+                JOIN dbo.PRODUCTS AS PRD
+                    ON G.Name = PRD.Name
+                JOIN dbo.ORDERS AS O
+                    ON DSG.OrderID = O.OrderID
+    WHERE       DATEDIFF(QUARTER, O.OrderDate, GETDATE()) = 1
+),
+income_per_seed_from_premade_per_order AS (
+    /*
+        find the income and quantity of each seed for each premade garden sold in the last quarter
+    */
+    SELECT      Seed = PLT.Seed,
+                TotalIncome = (PRD.Price - PRD.Discount) * I.Quantity * PLT.Quantity / SUM(PLT.Quantity) OVER (PARTITION BY O.OrderID, I.Name),
+                QuantitySold = PLT.Quantity*I.Quantity
+    FROM        dbo.INCLUSIONS AS I
+                JOIN dbo.PRODUCTS AS PRD
+                    ON I.Name = PRD.Name
+                JOIN dbo.GARDENS AS G
+                    ON I.Name = G.Name
+                JOIN dbo.PLANTEDS AS PLT
+                    ON G.Name = PLT.Garden
+                JOIN dbo.ORDERS AS O
+                    ON I.OrderID = O.OrderID
+    WHERE       DATEDIFF(QUARTER, O.OrderDate, GETDATE()) = 1
+),
+income_per_seed_as_simple_product AS (
+    /*
+        find the income and quantity of each seed for each sell of seeds in the last quarter
+    */
+    SELECT      Seed = I.Name,
+                TotalIncome = (PRD.Price - PRD.Discount) * I.Quantity,
+                QuantitySold = I.Quantity
+    FROM        dbo.INCLUSIONS AS I
+                JOIN dbo.PRODUCTS AS PRD
+                    ON I.Name = PRD.Name
+                JOIN dbo.ORDERS AS O
+                    ON I.OrderID = O.OrderID
+    WHERE       I.Name IN (SELECT Name FROM dbo.SEEDS) AND DATEDIFF(QUARTER, O.OrderDate, GETDATE()) = 1
+),
+OverallStat AS (
+    /*
+        calculate income statistics for each seed over all kinds of sales in the last quarter
+    */
+    SELECT      Seed = SeedIncome.Seed,
+                TotalIncome = SUM(SeedIncome.TotalIncome),
+                QuantitySold = SUM(SeedIncome.QuantitySold),
+                AvgPriceUnit = SUM(SeedIncome.TotalIncome)/SUM(SeedIncome.QuantitySold),
+                BasePrice = PRD.Price - PRD.Discount
+    FROM
+                (
+                    SELECT      Seed,
+                                TotalIncome,
+                                QuantitySold
+                    FROM        income_per_seed_from_designs_per_order
+                    UNION
+                    SELECT      Seed,
+                                TotalIncome,
+                                QuantitySold
+                    FROM        income_per_seed_from_premade_per_order
+                    UNION
+                    SELECT      Seed,
+                                TotalIncome,
+                                QuantitySold
+                    FROM        income_per_seed_as_simple_product
+                ) AS SeedIncome
+                JOIN    dbo.PRODUCTS AS PRD
+                            ON SeedIncome.Seed = PRD.Name
+    GROUP BY    Seed, PRD.Price - PRD.Discount
+),
+DesignStat AS (
+    /*
+        calculate income statistics for each seed over seeds sold as a part of a part of a designed garden in the last quarter
+    */
+    SELECT      Seed = design.Seed, 
+                TotalIncome = SUM(design.TotalIncome),
+                QuantitySold = SUM(design.QuantitySold),
+                AvgPriceUnit = SUM(design.TotalIncome)/SUM(design.QuantitySold),
+                BasePrice = PRD.Price - PRD.Discount
+    FROM        income_per_seed_from_designs_per_order AS design
+                JOIN dbo.PRODUCTS AS PRD
+                    ON design.Seed = PRD.Name
+    GROUP BY    Seed, PRD.Price - PRD.Discount
+),
+PremadeStat AS (
+    /*
+        calculate income statistics for each seed over seeds sold as a part of a part of a premade garden in the last quarter
+    */
+    SELECT      Seed = premade.Seed, 
+                TotalIncome = SUM(premade.TotalIncome),
+                QuantitySold = SUM(premade.QuantitySold),
+                AvgPriceUnit = SUM(premade.TotalIncome)/SUM(premade.QuantitySold),
+                BasePrice = PRD.Price - PRD.Discount
+    FROM        income_per_seed_from_premade_per_order AS premade
+                JOIN dbo.PRODUCTS AS PRD
+                    ON premade.Seed = PRD.Name
+    GROUP BY    Seed, PRD.Price - PRD.Discount
+),
+SeedsInfo AS (
+    SELECT  Seed = sd.Name, 
+            sd.Season, 
+            [Seed Size] = sd.[Size], 
+            [Sun Amount] = sd.Sun_amount, 
+            [Seed Type] = STRING_AGG([Type], ', ') 
+    FROM dbo.SEEDS AS sd
+    INNER JOIN dbo.SEED_TYPES tp
+        ON sd.Name = tp.Name
+    GROUP BY sd.Name, sd.Season, sd.[Size], sd.Sun_amount
+)
+/*
+    present report of seed profitability in the last quarter in an appropriate format
+*/
+SELECT      Seed = OST.Seed,
+            INF.[Seed Size],
+            INF.Season,
+            INF.[Sun Amount],
+            INF.[Seed Type],
+            [Total Income] = OST.TotalIncome,
+            [Quantity Sold] = OST.QuantitySold,
+            [Avg Price per Unit] = OST.AvgPriceUnit,
+            [Profit %] = CONCAT(CAST((OST.AvgPriceUnit - OST.BasePrice) / OST.BasePrice * 100 AS varchar(7)), '%'),
+            [Designed - Avg Price per Unit] = CASE WHEN DST.QuantitySold IS NULL THEN OST.BasePrice ELSE DST.AvgPriceUnit END,
+            [Designed - Profit %] = CONCAT(CAST((DST.AvgPriceUnit - DST.BasePrice) / DST.BasePrice * 100 AS varchar(7)), '%'),
+            [Premade - Avg Price per Unit] = PST.AvgPriceUnit,
+            [Premade - Profit %] = CONCAT(CAST((PST.AvgPriceUnit - PST.BasePrice) / PST.BasePrice * 100 AS VARCHAR(7)), '%')
+FROM        OverallStat AS OST
+            LEFT JOIN DesignStat AS DST
+                ON OST.Seed = DST.Seed
+            LEFT JOIN PremadeStat AS PST
+                ON OST.Seed = PST.Seed
+            INNER JOIN SeedsInfo AS INF
+                ON OST.Seed = INF.Seed
+ORDER BY    OST.AvgPriceUnit DESC
+
+
+
+
+/* 
+    FOR DASHBOARD
+*/
+
+/*
+    Query 1 - for KPI: Sales ($) in the last 12 months and last Sales trend
+*/
+
+/* Calculate total sales in the last year */
+WITH total_sales_last_year AS (
+    SELECT  total_sales = SUM(product_price)
+    FROM
+        (
+                SELECT  ord.OrderID, 
+                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                FROM        dbo.ORDERS AS ord
+                INNER JOIN dbo.INCLUSIONS AS inc
+                    ON ord.OrderID = inc.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON inc.Name = prd.Name
+                WHERE DATEDIFF(DAY, ord.OrderDate, GETDATE()) <= 365 /*choose last year*/
+
+                UNION
+                /* add sales of custom designed gardens */
+                SELECT      ord.OrderID,
+                            product_price = (prd.Price - prd.Discount)* dsg.Quantity
+                FROM        dbo.DESIGNS AS dsg
+                INNER JOIN  dbo.GARDENS AS g
+                    ON dsg.Name = g.Name
+                INNER JOIN dbo.ORDERS AS ord
+                    ON dsg.OrderID = ord.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON g.Name = prd.Name
+        ) AS ords
+),
+/* Calculate the last sales trend (sales are up or down)? */
+last_sales_trend AS (
+    /* Calculate Sales per month and trend for each previous month.
+        Then select the month that's closest to the current month and show it's trend */          
+    SELECT  TOP 1
+            [Month],
+            [Months From Today],
+            sls.Sales,
+            [Previous Month Sales] = LEAD(sls.Sales) Over(ORDER BY [Months From Today]),
+            Trend = CASE WHEN Sales - LEAD(sls.Sales) Over(ORDER BY [Months From Today]) > 0 THEN '+' ELSE '-' END
+    FROM
+    (
+    SELECT  ords.[Month],
+            [Months From Today],
+            [Sales] = SUM(product_price)
+    FROM
+        (
+                SELECT  ord.OrderID, 
+                        [Month] = DATENAME(MONTH, ord.OrderDate),
+                        [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
+                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                FROM        dbo.ORDERS AS ord
+                INNER JOIN dbo.INCLUSIONS AS inc
+                    ON ord.OrderID = inc.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON inc.Name = prd.Name
+                WHERE DATEDIFF(DAY, ord.OrderDate, GETDATE()) <= 365 /*choose last year*/
+
+                UNION
+                /* add sales of custom designed gardens */
+                SELECT      ord.OrderID,
+                            [Month] = DATENAME(MONTH, ord.OrderDate),
+                            [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
+                            product_price = (prd.Price - prd.Discount)* dsg.Quantity
+                FROM        dbo.DESIGNS AS dsg
+                INNER JOIN  dbo.GARDENS AS g
+                    ON dsg.Name = g.Name
+                INNER JOIN dbo.ORDERS AS ord
+                    ON dsg.OrderID = ord.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON g.Name = prd.Name
+        ) AS ords
+    GROUP BY  ords.[Months from Today], ords.[Month]
+
+    ) AS sls
+    ORDER BY [Months From Today]
+)
+SELECT sls.total_sales, 
+        trd.Trend
+FROM total_sales_last_year AS sls,
+     last_sales_trend AS trd
+
+
+
+/*
+    Query 2 - for KPI: Ratio Sales ($) from Gardens sold, out of the general sales
+*/
+
+WITH
+sales_from_premade_gardens AS (
+    SELECT  [Premae_Garden_Sales] = SUM(product_price)
+    FROM
+        (
+                SELECT  ord.OrderID,
+                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                FROM        dbo.ORDERS AS ord
+                INNER JOIN dbo.INCLUSIONS AS inc
+                    ON ord.OrderID = inc.OrderID
+                JOIN dbo.PRODUCTS AS prd
+                    ON inc.Name = prd.Name
+                JOIN dbo.GARDENS AS G
+                    ON inc.Name = G.Name
+            
+        ) AS ords
+),
+sales_from_custom_gardens AS (
+    SELECT  [Custom_Garden_Sales] = SUM(product_price)
+    FROM
+        (
+                SELECT      ord.OrderID, dsg.name, dsg.DesignID,
+                            product_price = (prd.Price - prd.Discount)*Quantity
+                FROM        dbo.DESIGNS AS dsg
+                INNER JOIN  dbo.GARDENS AS g
+                    ON dsg.Name = g.Name
+                INNER JOIN dbo.ORDERS AS ord
+                    ON dsg.OrderID = ord.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON g.Name = prd.Name
+                
+        ) AS ords
+),
+total_sales AS (
+    SELECT  total_sales = SUM(product_price)
+    FROM
+        (
+                SELECT  ord.OrderID, 
+                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                FROM        dbo.ORDERS AS ord
+                INNER JOIN dbo.INCLUSIONS AS inc
+                    ON ord.OrderID = inc.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON inc.Name = prd.Name
+
+                UNION
+                /* add sales of custom designed gardens */
+                SELECT      ord.OrderID,
+                            product_price = (prd.Price - prd.Discount)* dsg.Quantity
+                FROM        dbo.DESIGNS AS dsg
+                INNER JOIN  dbo.GARDENS AS g
+                    ON dsg.Name = g.Name
+                INNER JOIN dbo.ORDERS AS ord
+                    ON dsg.OrderID = ord.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON g.Name = prd.Name
+        ) AS ords
+)
+SELECT  [Gardens Sales Ratio] = ((pre.Premae_Garden_Sales + cus.Custom_Garden_Sales)/tot.total_sales)*100
+FROM    sales_from_premade_gardens AS pre,
+        sales_from_custom_gardens AS cus,
+        total_sales AS tot
+    
+
+
+
+/* 
+    Trend Query #1 - Per State and City: show the cumulative distribution of each city for
+                marketing focus.
+    NOTE: FOR DRILL DOWN HIRERCHY PURPOSES, NEEDED TO ADD COLUMN cume_dist_State, SO
+            THE INITIAL HEAT MAP WILL START FROM THE STATES AND NOT THE CITITES.
+
+*/
+
+SELECT      ordcities.State, 
+            ordcities.City, 
+            ordcities.Orders_per_City,
+            city_rank_by_orders = ROW_NUMBER() over (Partition BY ordcities.State Order BY ordcities.Sales_per_City DESC),
+            cume_dist_City = CUME_DIST() OVER (PARTITION BY State ORDER BY Orders_per_City)
+FROM
+(
+            /* Calculate Sales per City */
+            SELECT  State, 
+                    City, 
+                    Orders_per_City = COUNT(OrderID),
+                    Sales_per_City = SUM(order_price)
+            FROM 
+                    (   /* extract geography (State, City) for each order and calculate order price */
+                        SELECT   OrderID, State, City, order_price = SUM(product_price)
+                        FROM
+                                (
+                                    SELECT ord.OrderID, 
+                                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[2]', 'varchar(128)')), '') AS varchar(128)) AS State,
+                                        CAST(COALESCE(LTRIM(CAST(('<X>'+REPLACE(Address,',' ,'</X><X>')+'</X>') AS XML).value('(/X)[3]', 'varchar(128)')), '') AS varchar(128)) AS City,
+                                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                                    FROM        dbo.ORDERS AS ord
+                                    INNER JOIN dbo.INCLUSIONS AS inc
+                                        ON ord.OrderID = inc.OrderID
+                                    INNER JOIN dbo.PRODUCTS AS prd
+                                        ON inc.Name = prd.Name
+                                    ) AS ords
+                        GROUP BY    OrderID, State, City
+                    ) AS ordState
+            GROUP BY State, City
+) AS ordcities
+ORDER BY    State, city_rank_by_orders
+
+
+/*
+    Trend Query #2 - sales by month. need to add state
+*/
+SELECT
+            [Month],
+            [Months From Today],
+            sls.Sales
+    FROM
+    (
+    SELECT  ords.[Month],
+            [Months From Today],
+            [Sales] = SUM(product_price)
+    FROM
+        (
+                SELECT  ord.OrderID, 
+                        [Month] = DATENAME(MONTH, ord.OrderDate),
+                        [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
+                        product_price = inc.Quantity * (prd.Price - prd.Discount)
+                FROM        dbo.ORDERS AS ord
+                INNER JOIN dbo.INCLUSIONS AS inc
+                    ON ord.OrderID = inc.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON inc.Name = prd.Name
+                WHERE DATEDIFF(DAY, ord.OrderDate, GETDATE()) <= 365 /*choose last year*/
+
+                UNION
+                /* add sales of custom designed gardens */
+                SELECT      ord.OrderID,
+                            [Month] = DATENAME(MONTH, ord.OrderDate),
+                            [Months from Today] = DATEDIFF(MONTH, ord.OrderDate, GETDATE()),
+                            product_price = (prd.Price - prd.Discount)* dsg.Quantity
+                FROM        dbo.DESIGNS AS dsg
+                INNER JOIN  dbo.GARDENS AS g
+                    ON dsg.Name = g.Name
+                INNER JOIN dbo.ORDERS AS ord
+                    ON dsg.OrderID = ord.OrderID
+                INNER JOIN dbo.PRODUCTS AS prd
+                    ON g.Name = prd.Name
+
+        ) AS ords
+    GROUP BY  ords.[Months from Today], ords.[Month]
+
+    ) AS sls
+    ORDER BY [Months From Today]
