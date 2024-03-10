@@ -638,9 +638,8 @@ FROM total_sales_last_year AS sls,
 /*
     Query 2 - for KPI: Ratio Sales ($) from Gardens sold, out of the general sales
 */
-
-WITH
-sales_from_premade_gardens AS (
+;
+WITH sales_from_premade_gardens AS (
     SELECT  [Premae_Garden_Sales] = SUM(product_price)
     FROM
         (
