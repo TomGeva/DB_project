@@ -1,5 +1,3 @@
--- || TABLE CREATION SECTION ||
-
 CREATE TABLE dbo.PRODUCTS (		-- creating dbo.PRODUCTS table
 	Name			Varchar(80)			NOT NULL,
 	Price			Smallmoney			NOT NULL,
@@ -130,8 +128,8 @@ CREATE TABLE dbo.ORDERS (		-- creating dbo.ORDERS table
 
 CREATE TABLE dbo.DESIGNS (		-- creating dbo.DESIGNS table
 	Name			Varchar(80)			NOT NULL,
-	DesignID		Int					NOT NULL,
-	OrderID 		Int					NOT NULL,
+	DesignID		INT					NOT NULL,
+	OrderID 		INT					NOT NULL,
 	Quantity		Tinyint				NOT NULL		DEFAULT 1,
 
 	CONSTRAINT	Pk_DESIGNS		PRIMARY KEY		(Name, DesignID),
@@ -141,7 +139,7 @@ CREATE TABLE dbo.DESIGNS (		-- creating dbo.DESIGNS table
 
 CREATE TABLE dbo.CHOSENS (		-- creating dbo.CHOSENS table
 	Garden			Varchar(80)			NOT NULL,
-	Design			Int					NOT NULL,
+	Design			INT					NOT NULL,
 	Seed 			Varchar(80)			NOT NULL,
 	Quantity		Tinyint				NOT NULL		DEFAULT 1,
 
@@ -164,17 +162,14 @@ CREATE TABLE dbo.INCLUSIONS (	-- creating dbo.INCLUSIONS table
 									REFERENCES	dbo.PRODUCTS	(Name)
 )
 
--- || CONSTRAINTS ADDITION SECTION ||
 
--- contrsaints for inforcing values of price and discount of products
+--Add checks
 
 ALTER TABLE dbo.PRODUCTS
 	ADD	CONSTRAINT	Ck_Price
 			CHECK	(Price > 0),
 		CONSTRAINT	Ck_Discount
 			CHECK	(Discount < Price)
-
--- constraint that inforces Email format
 
 ALTER TABLE dbo.USERS
 	ADD	CONSTRAINT	Ck_Email
@@ -186,10 +181,6 @@ ALTER TABLE dbo.USERS
 					AND Password LIKE '%[*+@#$%&?]%' 
 					AND LEN([Password]) >= (8))
 
-
-
--- constraint that inforces ip format
-
 ALTER TABLE dbo.SEARCHES
 	ADD	CONSTRAINT	Ck_IP_address
 			CHECK	((ParseName(IP_address, 4) BETWEEN 0 AND 255) 
@@ -197,20 +188,16 @@ ALTER TABLE dbo.SEARCHES
 					AND(ParseName(IP_address, 2) BETWEEN 0 AND 255)
 					AND(ParseName(IP_address, 1) BETWEEN 0 AND 255))
 
--- constraints that inforces values of Size and Season
-
 ALTER TABLE dbo.SEEDS
 	ADD	CONSTRAINT	Ck_Size
 			CHECK	(Size IN ('Small', 'Large')),
 		CONSTRAINT	Ck_Season
 			CHECK	(Season IN ('Summer', 'Spring', 'Winter', 'Fall')),
         CONSTRAINT  Ck_Sun_amount
-            CHECK   (Sun_amount IN ('Partila Shade', 'Partial Shade / Shade', 
+            CHECK   (Sun_amount IN ('Partial Shade', 'Partial Shade / Shade', 
                                     'Full Sun / Partial Shade', 'Prefers Shade', 
                                     'Shade', 'Prefers Partial Shade', 
                                     'Full Sun', 'Prefers Full Sun'))
-
--- constraints that inforces values of Small_count and Large_count
 
 ALTER TABLE dbo.GARDENS		
 	ADD	CONSTRAINT	Ck_counts
@@ -219,14 +206,13 @@ ALTER TABLE dbo.GARDENS
 					OR (Small_count = 8 AND Large_count = 0))
 
 ALTER TABLE dbo.PLANTEDS
-    ADD CONSTRAINT  Ck_Quantity_pltd
+    ADD CONSTRAINT  Ck_Quantity_plntd
             CHECK   (Quantity > 0)
-
+        
 ALTER TABLE dbo.DETAILS
 	ADD	CONSTRAINT	Ck_Phone#
 			CHECK	(Phone# LIKE '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
-
--- constraint that inforces value of quantity
+            
 ALTER TABLE dbo.DESIGNS 
 	ADD	CONSTRAINT	Ck_Quantity_dsg
 			CHECK	(Quantity > 0)
@@ -239,18 +225,8 @@ ALTER TABLE dbo.INCLUSIONS
 	ADD	CONSTRAINT	Ck_Quantity_ncl
 			CHECK	(Quantity > 0)
 
--- add constraint to inforce phone# format
 
-
-
--- add constraint to inforce password restrictions
-
-
-
-
--- || LOOKUP TABLES CREATION ||
-
--- add seed type lookup table
+--Create lookup tables
 
 CREATE TABLE dbo.SEEDTYPELOOKUP (
 	Type			Varchar(20)		PRIMARY KEY		NOT NULL
@@ -263,8 +239,6 @@ VALUES
 ALTER TABLE dbo.SEED_TYPES
 	ADD	CONSTRAINT	Fk_seedtypeLU	FOREIGN KEY (Type)	
 									REFERENCES	dbo.SEEDTYPELOOKUP (Type)
-
--- add payment type lookup table
 
 CREATE TABLE dbo.PYMNTTYPELOOKUP (
 	Type			Varchar(7)		PRIMARY KEY		NOT NULL
@@ -287,43 +261,3 @@ ALTER TABLE dbo.ORDERS
 										REFERENCES	dbo.PYMNTTYPELOOKUP	(Type),
         CONSTRAINT  Fk_Shpmmethd    FOREIGN KEY (Shipping_method)
                                         REFERENCES  dbo.SHIPNGMTHDLOOKUP    (Method)
-
-
--- || DROPING OF TABLES SECTION ||
-
-
-DROP TABLE dbo.INCLUSIONS
-
-DROP TABLE dbo.CHOSENS
-
-DROP TABLE dbo.DESIGNS
-
-DROP TABLE dbo.ORDERS
-
-DROP TABLE dbo.PYMNTTYPELOOKUP
-
-DROP TABLE dbo.SHIPNGMTHDLOOKUP
-
-DROP TABLE dbo.DETAILS_OF
-
-DROP TABLE dbo.DETAILS
-
-DROP TABLE dbo.PLANTEDS
-
-DROP TABLE dbo.GARDENS
-
-DROP TABLE dbo.SEED_TYPES
-
-DROP TABLE dbo.SEEDTYPELOOKUP
-
-DROP TABLE dbo.SEEDS
-
-DROP TABLE dbo.RESULTS
-
-DROP TABLE dbo.SEARCHES
-
-DROP TABLE dbo.USERS
-
-DROP TABLE dbo.RELATIONS
-
-DROP TABLE dbo.PRODUCTS
