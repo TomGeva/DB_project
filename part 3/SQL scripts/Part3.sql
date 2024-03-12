@@ -324,6 +324,7 @@ BULK INSERT dbo.INCLUSIONS FROM 'D:\\code files\\GitHub\\university\\DB_project\
 
 /* 
     Query 1
+    for every seed, what is the quantity that was ordered as a part of a designed garden, in the last month and in the same month a year before
 */
 
 SELECT      [Seed Name] = C.Seed, 
@@ -341,6 +342,8 @@ ORDER BY    [Seed Quantitity Of Last Month] DESC, [Seed Quantitity Of Year Befor
 
 /*
     Query 2
+    How many purchases were made of each personalized garden type from the past year?
+    Motivation: Estimate how many gardens to build this year from each type.
 */
 
 SELECT D.Name,
@@ -353,10 +356,11 @@ ORDER BY [Total Orders] DESC
 
 /* PART 2 - QUERIES WITH NESTING */
 
--- complete
 
 /*
     Query 1
+    Find popular search words.
+    Motivaition: detect popular products and trends that could be incorporated into advertisement.
 */
 
 SELECT      TOP 15 
@@ -374,6 +378,8 @@ ORDER BY    Appearances DESC
 
 /*
     Query 2
+    Which months of the year are the buissiest on avg? 
+    Motivation: Post advertisments and discounts on the website on those months.
 */
 
 SELECT      [Average Orders] = AVG(Orders),
@@ -400,10 +406,14 @@ HAVING      AVG(Orders) > ( /* select months that their average orders is above 
             )
 ORDER BY    [Average Orders] DESC
 
+
 /* PART 3 - Upgraded Nested Queries */
 
 /* 
     Query 1
+    Detection and removal of old product relations.
+    If in the last 3 years the two products weren't ordered together, the relation is considered old.
+    This not including seeds that are a part of a garden.
 */
 
 DELETE  FROM dbo.RELATIONS
@@ -423,6 +433,7 @@ WHERE   CONCAT(Product1, Product2) NOT IN   (
 
 /* 
     Query 2
+    Yearly-Quarter performance report of seeds of type Root Vegetables
 */
 
 SELECT      [Seed_Name] = Seed,
@@ -487,9 +498,12 @@ ORDER BY    YEAR(OrderDate), DATEPART(QUARTER, OrderDate), [Total Quantity] DESC
 
 /*
     Query 1
+    Per State:  Rank the cities by total sales - for management / marketing.
+                Also, show the cumulative distribution of each city order-wise for:
+                marketing focus or supply-chain management - drivers and trucks allocation
 */
 SELECT      ordcities.State, ordcities.City, ordcities.Orders_per_City,
-            city_rank_by_orders = ROW_NUMBER() over (Partition BY ordcities.State Order BY ordcities.Sales_per_City DESC),
+            city_rank_by_sales = ROW_NUMBER() over (Partition BY ordcities.State Order BY ordcities.Sales_per_City DESC),
             cume_dist = CUME_DIST() OVER (PARTITION BY State ORDER BY Orders_per_City)
 FROM
 (
@@ -514,11 +528,15 @@ FROM
                     ) AS ordState
             GROUP BY State, City
 ) AS ordcities
-ORDER BY    State, city_rank_by_orders
+ORDER BY    State, city_rank_by_sales
 
 
 /* 
     Query 2
+    Per User:   Calculate Avg. Days gap between orders and amount of days since last order.
+                With this information, estimate the time to the next order a user will make.
+    Also calculate total Avg. Days gap between orders.
+    Motivation: Market analysis, detect demand rate and plan manufacturing rates / advertisment
 */
 SELECT *
 FROM 
@@ -545,6 +563,11 @@ ORDER BY    Estimated_Days_to_Next_Order DESC
 
 
 /* PART 5 - WITH QUERY */
+
+/*
+    Report of seed profitability in the Last quarter, in comparison to the base price of the seed and overall the sales. 
+    Show differentiation between designed gardens and premade gardens.
+*/
 
 WITH
 income_per_seed_from_designs_per_order AS (
