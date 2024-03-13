@@ -429,7 +429,10 @@ WHERE   CONCAT(Product1, Product2) NOT IN   (
                                                 WHERE I1.OrderID = I2.OrderID AND DATEDIFF(YEAR,O.OrderDate, GETDATE()) BETWEEN 1 AND 3
                                             )
 
-
+/* was added back into file after haganot */
+/* to reset RELATIONS */
+DELETE FROM dbo.RELATIONS
+INSERT INTO dbo.RELATIONS (Product1, Product2) SELECT * FROM dbo.RELATIONS_
 
 /* 
     Query 2
